@@ -21,6 +21,7 @@ interface Investment {
   type: Database['public']['Enums']['investment_type'];
   initial_amount: number;
   current_balance: number;
+  indicator?: string;
   created_at: string;
 }
 
@@ -43,11 +44,13 @@ function Investimentos() {
   const [formData, setFormData] = useState<{
     name: string;
     type: Database['public']['Enums']['investment_type'] | '';
+    indicator: string;
     initial_amount: string;
     current_balance: string;
   }>({
     name: '',
     type: '',
+    indicator: '',
     initial_amount: '',
     current_balance: ''
   });
@@ -121,6 +124,7 @@ function Investimentos() {
       const investmentData = {
         name: formData.name,
         type: formData.type as Database['public']['Enums']['investment_type'],
+        indicator: formData.indicator || null,
         initial_amount: parseFloat(formData.initial_amount),
         current_balance: parseFloat(formData.current_balance),
         user_id: user?.id
@@ -153,7 +157,7 @@ function Investimentos() {
 
       setIsModalOpen(false);
       setEditingInvestment(null);
-      setFormData({ name: '', type: '', initial_amount: '', current_balance: '' });
+      setFormData({ name: '', type: '', indicator: '', initial_amount: '', current_balance: '' });
       fetchInvestments();
     } catch (error) {
       console.error('Error saving investment:', error);
@@ -170,6 +174,7 @@ function Investimentos() {
     setFormData({
       name: investment.name,
       type: investment.type,
+      indicator: investment.indicator || '',
       initial_amount: investment.initial_amount.toString(),
       current_balance: investment.current_balance.toString()
     });
@@ -229,7 +234,7 @@ function Investimentos() {
             <DialogTrigger asChild>
               <Button onClick={() => {
                 setEditingInvestment(null);
-                setFormData({ name: '', type: '', initial_amount: '', current_balance: '' });
+                setFormData({ name: '', type: '', indicator: '', initial_amount: '', current_balance: '' });
               }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Investimento
@@ -269,6 +274,15 @@ function Investimentos() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div>
+                  <Label htmlFor="indicator">Indicador</Label>
+                  <Input
+                    id="indicator"
+                    value={formData.indicator}
+                    onChange={(e) => setFormData({ ...formData, indicator: e.target.value })}
+                    placeholder="Ex: PETR4, IBOV, CDI"
+                  />
                 </div>
                 <div>
                   <Label htmlFor="initial_amount">Valor Aplicado (Inicial) *</Label>
@@ -356,6 +370,7 @@ function Investimentos() {
                   <TableRow>
                     <TableHead>Nome do Ativo</TableHead>
                     <TableHead>Tipo</TableHead>
+                    <TableHead>Indicador</TableHead>
                     <TableHead>Saldo Atual</TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
@@ -365,6 +380,7 @@ function Investimentos() {
                     <TableRow key={investment.id}>
                       <TableCell className="font-medium">{investment.name}</TableCell>
                       <TableCell>{getTypeLabel(investment.type)}</TableCell>
+                      <TableCell>{investment.indicator || '-'}</TableCell>
                       <TableCell>
                         R$ {investment.current_balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </TableCell>

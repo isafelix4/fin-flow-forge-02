@@ -169,6 +169,7 @@ export type Database = {
           created_at: string
           current_balance: number
           id: number
+          indicator: string | null
           initial_amount: number
           name: string
           type: Database["public"]["Enums"]["investment_type"]
@@ -178,6 +179,7 @@ export type Database = {
           created_at?: string
           current_balance: number
           id?: number
+          indicator?: string | null
           initial_amount: number
           name: string
           type: Database["public"]["Enums"]["investment_type"]
@@ -187,6 +189,7 @@ export type Database = {
           created_at?: string
           current_balance?: number
           id?: number
+          indicator?: string | null
           initial_amount?: number
           name?: string
           type?: Database["public"]["Enums"]["investment_type"]
