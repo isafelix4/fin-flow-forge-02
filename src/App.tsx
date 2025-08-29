@@ -8,6 +8,8 @@ import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
+import Contas from "./pages/Contas";
+import Categorias from "./pages/Categorias";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -27,6 +29,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Index />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/contas" 
+              element={
+                <ProtectedRoute>
+                  <Contas />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/categorias" 
+              element={
+                <ProtectedRoute>
+                  <Categorias />
                 </ProtectedRoute>
               } 
             />

@@ -223,6 +223,38 @@ export type Database = {
         }
         Relationships: []
       }
+      subcategories: {
+        Row: {
+          category_id: number
+          created_at: string
+          id: number
+          name: string
+          user_id: string
+        }
+        Insert: {
+          category_id: number
+          created_at?: string
+          id?: never
+          name: string
+          user_id: string
+        }
+        Update: {
+          category_id?: number
+          created_at?: string
+          id?: never
+          name?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "subcategories_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           account_id: number
@@ -234,6 +266,7 @@ export type Database = {
           id: number
           investment_id: number | null
           reference_month: string
+          subcategory_id: number | null
           transaction_date: string
           type: Database["public"]["Enums"]["transaction_type"]
           user_id: string
@@ -248,6 +281,7 @@ export type Database = {
           id?: number
           investment_id?: number | null
           reference_month: string
+          subcategory_id?: number | null
           transaction_date?: string
           type: Database["public"]["Enums"]["transaction_type"]
           user_id: string
@@ -262,6 +296,7 @@ export type Database = {
           id?: number
           investment_id?: number | null
           reference_month?: string
+          subcategory_id?: number | null
           transaction_date?: string
           type?: Database["public"]["Enums"]["transaction_type"]
           user_id?: string
@@ -293,6 +328,13 @@ export type Database = {
             columns: ["investment_id"]
             isOneToOne: false
             referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
             referencedColumns: ["id"]
           },
           {
