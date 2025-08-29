@@ -30,6 +30,7 @@ const DEBT_TYPES = [
   { value: 'Financing', label: 'Financiamento' },
   { value: 'Loan', label: 'Empréstimo' },
   { value: 'Consortium', label: 'Consórcio' },
+  { value: 'Credit Card', label: 'Cartão de Crédito' },
   { value: 'Other', label: 'Outros' }
 ];
 

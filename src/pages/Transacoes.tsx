@@ -155,13 +155,14 @@ export default function Transacoes() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Mês de Referência</TableHead>
                     <TableHead>Data</TableHead>
                     <TableHead>Descrição</TableHead>
                     <TableHead>Categoria</TableHead>
+                    <TableHead>Subcategoria</TableHead>
                     <TableHead>Conta</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Valor</TableHead>
-                    <TableHead>Mês de Referência</TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -169,10 +170,14 @@ export default function Transacoes() {
                   {transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
+                        {new Date(transaction.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                      </TableCell>
+                      <TableCell>
                         {new Date(transaction.transaction_date).toLocaleDateString('pt-BR')}
                       </TableCell>
                       <TableCell className="font-medium">{transaction.description}</TableCell>
                       <TableCell>{transaction.categories?.name || 'Sem categoria'}</TableCell>
+                      <TableCell>{transaction.subcategories?.name || '-'}</TableCell>
                       <TableCell>{transaction.accounts?.name}</TableCell>
                       <TableCell>
                         <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
@@ -185,9 +190,6 @@ export default function Transacoes() {
                       </TableCell>
                       <TableCell>
                         R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </TableCell>
-                      <TableCell>
-                        {new Date(transaction.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">

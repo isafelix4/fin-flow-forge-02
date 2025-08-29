@@ -6,8 +6,9 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, AlertCircle, CheckCircle } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 import { Database } from '@/integrations/supabase/types';
@@ -45,6 +46,17 @@ interface CSVRow {
   description: string;
   amount: number;
   type: Database['public']['Enums']['transaction_type'];
+  category_id: string;
+  subcategory_id: string;
+  investment_id: string;
+  debt_id: string;
+}
+
+interface ParsedTransaction {
+  date: string;
+  description: string;
+  amount: number;
+  type: Database['public']['Enums']['transaction_type'];
 }
 
 export default function ImportarTransacoes() {
@@ -58,21 +70,16 @@ export default function ImportarTransacoes() {
   const [debts, setDebts] = useState<Debt[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
+  const [step, setStep] = useState<'upload' | 'categorize'>('upload');
   
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
+  const [transactionCategories, setTransactionCategories] = useState<CSVRow[]>([]);
   const [formData, setFormData] = useState<{
     account_id: string;
-    category_id: string;
-    subcategory_id: string;
-    investment_id: string;
-    debt_id: string;
     reference_month: string;
   }>({
     account_id: '',
-    category_id: '',
-    subcategory_id: '',
-    investment_id: '',
-    debt_id: '',
     reference_month: new Date().toISOString().slice(0, 7) + '-01'
   });
 
@@ -81,17 +88,6 @@ export default function ImportarTransacoes() {
       fetchData();
     }
   }, [user]);
-
-  // Update subcategories when category changes
-  useEffect(() => {
-    if (formData.category_id) {
-      fetchSubcategories(parseInt(formData.category_id));
-    } else {
-      setSubcategories([]);
-    }
-    // Reset dependent fields
-    setFormData(prev => ({ ...prev, subcategory_id: '', investment_id: '', debt_id: '' }));
-  }, [formData.category_id]);
 
   const fetchData = async () => {
     try {
@@ -123,7 +119,7 @@ export default function ImportarTransacoes() {
     }
   };
 
-  const fetchSubcategories = async (categoryId: number) => {
+  const fetchSubcategoriesForCategory = async (categoryId: number): Promise<Subcategory[]> => {
     try {
       const { data, error } = await supabase
         .from('subcategories')
@@ -132,43 +128,51 @@ export default function ImportarTransacoes() {
         .eq('user_id', user?.id);
 
       if (error) throw error;
-      setSubcategories(data || []);
+      return data || [];
     } catch (error) {
       console.error('Error fetching subcategories:', error);
+      return [];
     }
   };
 
-  const parseCSV = (csvText: string): CSVRow[] => {
+  const parseCSV = (csvText: string): ParsedTransaction[] => {
     const lines = csvText.split('\n').filter(line => line.trim());
-    const rows: CSVRow[] = [];
+    const transactions: ParsedTransaction[] = [];
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      // Split by comma, but handle quoted fields that may contain commas
-      const columns: string[] = [];
-      let currentField = '';
-      let insideQuotes = false;
+      let columns: string[] = [];
       
-      for (let j = 0; j < line.length; j++) {
-        const char = line[j];
-        
-        if (char === '"') {
-          insideQuotes = !insideQuotes;
-        } else if (char === ',' && !insideQuotes) {
-          columns.push(currentField.trim().replace(/^"(.+)"$/, '$1'));
-          currentField = '';
-        } else {
-          currentField += char;
+      // Try different delimiters
+      const delimiters = [',', ';', '\t'];
+      let bestDelimiter = ',';
+      let maxColumns = 0;
+      
+      for (const delimiter of delimiters) {
+        const testColumns = line.split(delimiter);
+        if (testColumns.length > maxColumns) {
+          maxColumns = testColumns.length;
+          bestDelimiter = delimiter;
         }
       }
       
-      // Add the last field
-      columns.push(currentField.trim().replace(/^"(.+)"$/, '$1'));
+      // Parse with the best delimiter found
+      const rawColumns = line.split(bestDelimiter);
+      
+      // Clean and process columns
+      for (let col of rawColumns) {
+        col = col.trim();
+        // Remove surrounding quotes if present
+        if ((col.startsWith('"') && col.endsWith('"')) || (col.startsWith("'") && col.endsWith("'"))) {
+          col = col.slice(1, -1);
+        }
+        columns.push(col);
+      }
       
       if (columns.length !== 3) {
-        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas, encontradas ${columns.length}`);
+        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas, encontradas ${columns.length}. Verifique se o arquivo está no formato correto: Data,Descrição,Valor`);
       }
 
       const [dateStr, description, amountStr] = columns;
@@ -186,26 +190,28 @@ export default function ImportarTransacoes() {
         throw new Error(`Erro na linha ${i + 1}: data inválida`);
       }
 
-      // Parse amount - handle Brazilian decimal format (comma as decimal separator)
-      // Replace comma with dot for decimal places
-      let normalizedAmount = amountStr.replace(',', '.');
+      // Parse amount - handle Brazilian decimal format
+      let normalizedAmount = amountStr;
       
-      // Handle thousands separators - remove dots that are not decimal separators
-      // If there are multiple dots, keep only the last one as decimal separator
-      const dotCount = (normalizedAmount.match(/\./g) || []).length;
-      if (dotCount > 1) {
-        const parts = normalizedAmount.split('.');
-        const decimalPart = parts.pop(); // Last part is decimal
-        const integerPart = parts.join(''); // Join all other parts
-        normalizedAmount = integerPart + '.' + decimalPart;
+      // Remove currency symbols and spaces
+      normalizedAmount = normalizedAmount.replace(/[R$\s]/g, '');
+      
+      // Handle Brazilian number format: replace comma with dot for decimal
+      // But only if there's exactly one comma and it's followed by 1-2 digits
+      const commaMatch = normalizedAmount.match(/,(\d{1,2})$/);
+      if (commaMatch) {
+        normalizedAmount = normalizedAmount.replace(',', '.');
       }
+      
+      // Remove any remaining commas (thousands separators)
+      normalizedAmount = normalizedAmount.replace(/,/g, '');
       
       const amount = parseFloat(normalizedAmount);
       if (isNaN(amount)) {
         throw new Error(`Erro na linha ${i + 1}: valor inválido "${amountStr}"`);
       }
 
-      rows.push({
+      transactions.push({
         date: date.toISOString().split('T')[0],
         description: description.trim(),
         amount: Math.abs(amount),
@@ -213,7 +219,7 @@ export default function ImportarTransacoes() {
       });
     }
 
-    return rows;
+    return transactions;
   };
 
   const updatePatrimonyBalances = async (transactionData: any) => {
@@ -251,10 +257,8 @@ export default function ImportarTransacoes() {
         if (investmentData) {
           let newBalance;
           if (transactionData.type === 'Expense') {
-            // Aporte - increase balance
             newBalance = investmentData.current_balance + transactionData.amount;
           } else {
-            // Resgate - decrease balance
             newBalance = Math.max(0, investmentData.current_balance - transactionData.amount);
           }
 
@@ -284,7 +288,7 @@ export default function ImportarTransacoes() {
     }
   };
 
-  const handleImport = async () => {
+  const handleProcessFile = async () => {
     if (!selectedFile || !formData.account_id) {
       toast({
         title: "Erro",
@@ -294,34 +298,11 @@ export default function ImportarTransacoes() {
       return;
     }
 
-    const selectedCategory = categories.find(c => c.id === parseInt(formData.category_id));
-    
-    // Validate heritage fields based on category type
-    if (selectedCategory?.type === 'Debt' && !formData.debt_id) {
-      toast({
-        title: "Erro",
-        description: "Para categorias de dívidas, é obrigatório vincular a uma dívida",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (selectedCategory?.type === 'Investment' && !formData.investment_id) {
-      toast({
-        title: "Erro",
-        description: "Para categorias de investimentos, é obrigatório vincular a um investimento",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    setImporting(true);
-
     try {
       const csvText = await selectedFile.text();
-      const csvRows = parseCSV(csvText);
+      const parsed = parseCSV(csvText);
 
-      if (csvRows.length === 0) {
+      if (parsed.length === 0) {
         toast({
           title: "Erro",
           description: "O arquivo CSV está vazio ou não contém dados válidos",
@@ -330,22 +311,116 @@ export default function ImportarTransacoes() {
         return;
       }
 
-      const selectedAccount = accounts.find(a => a.id === parseInt(formData.account_id));
+      setParsedTransactions(parsed);
+      // Initialize categories for each transaction
+      const initCategories = parsed.map(() => ({
+        date: '',
+        description: '',
+        amount: 0,
+        type: 'Expense' as Database['public']['Enums']['transaction_type'],
+        category_id: '',
+        subcategory_id: '',
+        investment_id: '',
+        debt_id: ''
+      }));
+      setTransactionCategories(initCategories);
+      setStep('categorize');
+    } catch (error: any) {
+      console.error('Error processing file:', error);
+      toast({
+        title: "Erro",
+        description: error.message || "Erro ao processar arquivo CSV",
+        variant: "destructive"
+      });
+    }
+  };
 
-      // Process each row
+  const handleCategoryChange = async (index: number, categoryId: string) => {
+    const newCategories = [...transactionCategories];
+    newCategories[index] = {
+      ...newCategories[index],
+      category_id: categoryId,
+      subcategory_id: '',
+      investment_id: '',
+      debt_id: ''
+    };
+    setTransactionCategories(newCategories);
+
+    // Fetch subcategories for this category
+    if (categoryId) {
+      const subcats = await fetchSubcategoriesForCategory(parseInt(categoryId));
+      setSubcategories(prevSubs => {
+        const newSubs = [...prevSubs];
+        // Clear existing subcategories for this category and add new ones
+        const filtered = newSubs.filter(sub => sub.category_id !== parseInt(categoryId));
+        return [...filtered, ...subcats];
+      });
+    }
+  };
+
+  const handleSubcategoryChange = (index: number, subcategoryId: string) => {
+    const newCategories = [...transactionCategories];
+    newCategories[index] = {
+      ...newCategories[index],
+      subcategory_id: subcategoryId
+    };
+    setTransactionCategories(newCategories);
+  };
+
+  const handlePatrimonyChange = (index: number, field: 'investment_id' | 'debt_id', value: string) => {
+    const newCategories = [...transactionCategories];
+    newCategories[index] = {
+      ...newCategories[index],
+      [field]: value
+    };
+    setTransactionCategories(newCategories);
+  };
+
+  const handleFinalImport = async () => {
+    setImporting(true);
+
+    try {
+      const selectedAccount = accounts.find(a => a.id === parseInt(formData.account_id));
       let successCount = 0;
-      for (const row of csvRows) {
+
+      for (let i = 0; i < parsedTransactions.length; i++) {
+        const transaction = parsedTransactions[i];
+        const categoryData = transactionCategories[i];
+
+        // Validate category dependencies
+        const selectedCategory = categories.find(c => c.id === parseInt(categoryData.category_id));
+        
+        if (selectedCategory?.type === 'Debt' && !categoryData.debt_id) {
+          toast({
+            title: "Erro",
+            description: `Transação ${i + 1}: Para categorias de dívidas, é obrigatório vincular a uma dívida`,
+            variant: "destructive"
+          });
+          setImporting(false);
+          return;
+        }
+
+        if (selectedCategory?.type === 'Investment' && !categoryData.investment_id) {
+          toast({
+            title: "Erro",
+            description: `Transação ${i + 1}: Para categorias de investimentos, é obrigatório vincular a um investimento`,
+            variant: "destructive"
+          });
+          setImporting(false);
+          return;
+        }
+
         const transactionData = {
-          description: row.description,
-          amount: row.amount,
-          type: row.type,
-          transaction_date: row.date,
+          description: transaction.description,
+          amount: transaction.amount,
+          type: transaction.type,
+          transaction_date: transaction.date,
           reference_month: formData.reference_month,
           account_id: parseInt(formData.account_id),
-          category_id: formData.category_id ? parseInt(formData.category_id) : null,
-          subcategory_id: formData.subcategory_id ? parseInt(formData.subcategory_id) : null,
-          investment_id: formData.investment_id ? parseInt(formData.investment_id) : null,
-          debt_id: formData.debt_id ? parseInt(formData.debt_id) : null,
+          category_id: categoryData.category_id ? parseInt(categoryData.category_id) : null,
+          subcategory_id: categoryData.subcategory_id ? parseInt(categoryData.subcategory_id) : null,
+          investment_id: categoryData.investment_id ? parseInt(categoryData.investment_id) : null,
+          debt_id: categoryData.debt_id ? parseInt(categoryData.debt_id) : null,
           user_id: user?.id
         };
 
@@ -355,9 +430,7 @@ export default function ImportarTransacoes() {
 
         if (error) throw error;
 
-        // Update investment/debt balances
         await updatePatrimonyBalances(transactionData);
-        
         successCount++;
       }
 
@@ -366,16 +439,15 @@ export default function ImportarTransacoes() {
         description: `Importação concluída! ${successCount} transações foram adicionadas à conta ${selectedAccount?.name}.`
       });
 
-      // Reset form
+      // Reset everything
       setSelectedFile(null);
+      setParsedTransactions([]);
+      setTransactionCategories([]);
       setFormData({
         account_id: '',
-        category_id: '',
-        subcategory_id: '',
-        investment_id: '',
-        debt_id: '',
         reference_month: new Date().toISOString().slice(0, 7) + '-01'
       });
+      setStep('upload');
       
       // Reset file input
       const fileInput = document.getElementById('csv-file') as HTMLInputElement;
@@ -385,7 +457,7 @@ export default function ImportarTransacoes() {
       console.error('Error importing transactions:', error);
       toast({
         title: "Erro",
-        description: error.message || "Erro ao processar arquivo CSV",
+        description: error.message || "Erro ao importar transações",
         variant: "destructive"
       });
     } finally {
@@ -393,11 +465,7 @@ export default function ImportarTransacoes() {
     }
   };
 
-  const selectedCategory = categories.find(c => c.id === parseInt(formData.category_id));
-  const showDebtField = selectedCategory?.type === 'Debt';
-  const showInvestmentField = selectedCategory?.type === 'Investment';
-
-  // Generate month options (current + next 11 months)
+  // Generate month options
   const monthOptions = Array.from({ length: 12 }, (_, i) => {
     const date = new Date();
     date.setMonth(date.getMonth() + i);
@@ -405,6 +473,14 @@ export default function ImportarTransacoes() {
     const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     return { value, label };
   });
+
+  const getSubcategoriesForCategory = (categoryId: string) => {
+    return subcategories.filter(sub => sub.category_id === parseInt(categoryId));
+  };
+
+  const getCategoryType = (categoryId: string) => {
+    return categories.find(c => c.id === parseInt(categoryId))?.type;
+  };
 
   if (loading) {
     return (
@@ -421,7 +497,7 @@ export default function ImportarTransacoes() {
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container mx-auto px-4 py-8">
-        <div className="max-w-2xl mx-auto">
+        <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-6">Importar Extrato</h1>
           
           {/* Instructions */}
@@ -435,163 +511,228 @@ export default function ImportarTransacoes() {
             </AlertDescription>
           </Alert>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Configuração da Importação</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              {/* File Upload */}
-              <div>
-                <Label htmlFor="csv-file">Arquivo CSV *</Label>
-                <div className="mt-2">
-                  <Input
-                    id="csv-file"
-                    type="file"
-                    accept=".csv"
-                    onChange={handleFileChange}
-                    className="cursor-pointer"
-                  />
-                  {selectedFile && (
-                    <div className="mt-2 flex items-center text-sm text-green-600">
-                      <CheckCircle className="h-4 w-4 mr-1" />
-                      Arquivo selecionado: {selectedFile.name}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Target Account */}
-              <div>
-                <Label htmlFor="account_id">Para qual conta você deseja importar estas transações? *</Label>
-                <Select 
-                  value={formData.account_id} 
-                  onValueChange={(value) => setFormData({ ...formData, account_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a conta de destino" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {accounts.map((account) => (
-                      <SelectItem key={account.id} value={account.id.toString()}>
-                        {account.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Reference Month */}
-              <div>
-                <Label htmlFor="reference_month">Mês de Referência *</Label>
-                <Select 
-                  value={formData.reference_month} 
-                  onValueChange={(value) => setFormData({ ...formData, reference_month: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o mês de referência" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {monthOptions.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Category */}
-              <div>
-                <Label htmlFor="category_id">Categoria (Opcional)</Label>
-                <Select 
-                  value={formData.category_id} 
-                  onValueChange={(value) => setFormData({ ...formData, category_id: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione a categoria" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {categories.map((category) => (
-                      <SelectItem key={category.id} value={category.id.toString()}>
-                        {category.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Subcategory */}
-              {subcategories.length > 0 && (
+          {step === 'upload' && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Passo 1: Configuração Inicial</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* File Upload */}
                 <div>
-                  <Label htmlFor="subcategory_id">Subcategoria (Opcional)</Label>
+                  <Label htmlFor="csv-file">Arquivo CSV *</Label>
+                  <div className="mt-2">
+                    <Input
+                      id="csv-file"
+                      type="file"
+                      accept=".csv"
+                      onChange={handleFileChange}
+                      className="cursor-pointer"
+                    />
+                    {selectedFile && (
+                      <div className="mt-2 flex items-center text-sm text-green-600">
+                        <CheckCircle className="h-4 w-4 mr-1" />
+                        Arquivo selecionado: {selectedFile.name}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Target Account */}
+                <div>
+                  <Label htmlFor="account_id">Para qual conta você deseja importar estas transações? *</Label>
                   <Select 
-                    value={formData.subcategory_id} 
-                    onValueChange={(value) => setFormData({ ...formData, subcategory_id: value })}
+                    value={formData.account_id} 
+                    onValueChange={(value) => setFormData({ ...formData, account_id: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a subcategoria" />
+                      <SelectValue placeholder="Selecione a conta de destino" />
                     </SelectTrigger>
                     <SelectContent className="bg-background">
-                      {subcategories.map((subcategory) => (
-                        <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
-                          {subcategory.name}
+                      {accounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id.toString()}>
+                          {account.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
 
-              {/* Debt Field */}
-              {showDebtField && (
+                {/* Reference Month */}
                 <div>
-                  <Label htmlFor="debt_id">Vincular a Dívida *</Label>
+                  <Label htmlFor="reference_month">Mês de Referência *</Label>
                   <Select 
-                    value={formData.debt_id} 
-                    onValueChange={(value) => setFormData({ ...formData, debt_id: value })}
+                    value={formData.reference_month} 
+                    onValueChange={(value) => setFormData({ ...formData, reference_month: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a dívida" />
+                      <SelectValue placeholder="Selecione o mês de referência" />
                     </SelectTrigger>
                     <SelectContent className="bg-background">
-                      {debts.map((debt) => (
-                        <SelectItem key={debt.id} value={debt.id.toString()}>
-                          {debt.description}
+                      {monthOptions.map((month) => (
+                        <SelectItem key={month.value} value={month.value}>
+                          {month.label}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
                 </div>
-              )}
 
-              {/* Investment Field */}
-              {showInvestmentField && (
-                <div>
-                  <Label htmlFor="investment_id">Vincular a Ativo *</Label>
-                  <Select 
-                    value={formData.investment_id} 
-                    onValueChange={(value) => setFormData({ ...formData, investment_id: value })}
+                {/* Process File Button */}
+                <div className="pt-4">
+                  <Button 
+                    onClick={handleProcessFile}
+                    disabled={!selectedFile || !formData.account_id}
+                    className="w-full"
+                    size="lg"
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o ativo" />
-                    </SelectTrigger>
-                    <SelectContent className="bg-background">
-                      {investments.map((investment) => (
-                        <SelectItem key={investment.id} value={investment.id.toString()}>
-                          {investment.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <ArrowRight className="h-4 w-4 mr-2" />
+                    Processar Arquivo e Continuar
+                  </Button>
                 </div>
-              )}
+              </CardContent>
+            </Card>
+          )}
 
-              {/* Import Button */}
-              <div className="pt-4">
+          {step === 'categorize' && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Passo 2: Categorizar Transações Individualmente</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    Encontramos {parsedTransactions.length} transações no seu arquivo. 
+                    Configure a categoria para cada uma individualmente:
+                  </p>
+                  
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Categoria</TableHead>
+                          <TableHead>Subcategoria</TableHead>
+                          <TableHead>Vínculo</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {parsedTransactions.map((transaction, index) => {
+                          const categoryType = getCategoryType(transactionCategories[index]?.category_id || '');
+                          const availableSubcategories = getSubcategoriesForCategory(transactionCategories[index]?.category_id || '');
+                          
+                          return (
+                            <TableRow key={index}>
+                              <TableCell className="text-sm">
+                                {new Date(transaction.date).toLocaleDateString('pt-BR')}
+                              </TableCell>
+                              <TableCell className="text-sm font-medium max-w-[200px] truncate">
+                                {transaction.description}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                              </TableCell>
+                              <TableCell>
+                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                                  transaction.type === 'Income' 
+                                    ? 'bg-green-100 text-green-800' 
+                                    : 'bg-red-100 text-red-800'
+                                }`}>
+                                  {transaction.type === 'Income' ? 'Receita' : 'Despesa'}
+                                </span>
+                              </TableCell>
+                              <TableCell className="min-w-[150px]">
+                                <Select
+                                  value={transactionCategories[index]?.category_id || ''}
+                                  onValueChange={(value) => handleCategoryChange(index, value)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Categoria" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background">
+                                    {categories.map((category) => (
+                                      <SelectItem key={category.id} value={category.id.toString()}>
+                                        {category.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="min-w-[150px]">
+                                <Select
+                                  value={transactionCategories[index]?.subcategory_id || ''}
+                                  onValueChange={(value) => handleSubcategoryChange(index, value)}
+                                  disabled={availableSubcategories.length === 0}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Subcategoria" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background">
+                                    {availableSubcategories.map((subcategory) => (
+                                      <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
+                                        {subcategory.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="min-w-[150px]">
+                                {categoryType === 'Debt' && (
+                                  <Select
+                                    value={transactionCategories[index]?.debt_id || ''}
+                                    onValueChange={(value) => handlePatrimonyChange(index, 'debt_id', value)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Dívida" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-background">
+                                      {debts.map((debt) => (
+                                        <SelectItem key={debt.id} value={debt.id.toString()}>
+                                          {debt.description}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                {categoryType === 'Investment' && (
+                                  <Select
+                                    value={transactionCategories[index]?.investment_id || ''}
+                                    onValueChange={(value) => handlePatrimonyChange(index, 'investment_id', value)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Investimento" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-background">
+                                      {investments.map((investment) => (
+                                        <SelectItem key={investment.id} value={investment.id.toString()}>
+                                          {investment.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                {!categoryType && (
+                                  <span className="text-sm text-muted-foreground">-</span>
+                                )}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <div className="flex justify-between">
+                <Button variant="outline" onClick={() => setStep('upload')}>
+                  Voltar
+                </Button>
                 <Button 
-                  onClick={handleImport}
-                  disabled={importing || !selectedFile || !formData.account_id}
-                  className="w-full"
+                  onClick={handleFinalImport}
+                  disabled={importing}
                   size="lg"
                 >
                   {importing ? (
@@ -602,13 +743,13 @@ export default function ImportarTransacoes() {
                   ) : (
                     <>
                       <Upload className="h-4 w-4 mr-2" />
-                      Importar Transações
+                      Finalizar Importação
                     </>
                   )}
                 </Button>
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          )}
         </div>
       </div>
     </div>
