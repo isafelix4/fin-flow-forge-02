@@ -32,7 +32,7 @@ const INVESTMENT_TYPES = [
   { value: 'Other', label: 'Outros' }
 ];
 
-export default function Investimentos() {
+function Investimentos() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [investments, setInvestments] = useState<Investment[]>([]);
@@ -416,3 +416,5 @@ export default function Investimentos() {
     </div>
   );
 }
+
+export default Investimentos;

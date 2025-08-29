@@ -33,7 +33,7 @@ const DEBT_TYPES = [
   { value: 'Other', label: 'Outros' }
 ];
 
-export default function Dividas() {
+function Dividas() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [debts, setDebts] = useState<Debt[]>([]);
@@ -465,3 +465,5 @@ export default function Dividas() {
     </div>
   );
 }
+
+export default Dividas;
