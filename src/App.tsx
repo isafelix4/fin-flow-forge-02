@@ -10,6 +10,9 @@ import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
 import Contas from "./pages/Contas";
 import Categorias from "./pages/Categorias";
+import Investimentos from "./pages/Investimentos";
+import Dividas from "./pages/Dividas";
+import Transacoes from "./pages/Transacoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +48,30 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Categorias />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/investimentos" 
+              element={
+                <ProtectedRoute>
+                  <Investimentos />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/dividas" 
+              element={
+                <ProtectedRoute>
+                  <Dividas />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/transacoes" 
+              element={
+                <ProtectedRoute>
+                  <Transacoes />
                 </ProtectedRoute>
               } 
             />
