@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Edit, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { Header } from '@/components/Header';
 
 import { Database } from '@/integrations/supabase/types';
 
@@ -174,11 +175,20 @@ export default function Contas() {
   };
 
   if (loading) {
-    return <div className="p-6">Carregando...</div>;
+    return (
+      <div className="min-h-screen bg-background">
+        <Header />
+        <div className="container mx-auto px-4 py-8">
+          <div className="text-center">Carregando...</div>
+        </div>
+      </div>
+    );
   }
 
   return (
-    <div className="p-6">
+    <div className="min-h-screen bg-background">
+      <Header />
+      <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Minhas Contas</h1>
         <Dialog open={isModalOpen} onOpenChange={(open) => {
@@ -304,5 +314,6 @@ export default function Contas() {
         </Table>
       </div>
     </div>
-  );
+  </div>
+);
 }
