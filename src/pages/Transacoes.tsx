@@ -161,6 +161,7 @@ export default function Transacoes() {
                     <TableHead>Conta</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Valor</TableHead>
+                    <TableHead>Mês de Referência</TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -184,6 +185,9 @@ export default function Transacoes() {
                       </TableCell>
                       <TableCell>
                         R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        {new Date(transaction.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">

@@ -333,222 +333,224 @@ export default function Categorias() {
     <div className="min-h-screen bg-background">
       <Header />
       <div className="container mx-auto px-4 py-8">
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Minhas Categorias</h1>
-        <Dialog open={isCategoryModalOpen} onOpenChange={(open) => {
-          setIsCategoryModalOpen(open);
-          if (!open) resetCategoryForm();
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-3xl font-bold">Minhas Categorias</h1>
+          <div className="flex gap-2">
+            <FloatingTransactionButton />
+            <Dialog open={isCategoryModalOpen} onOpenChange={(open) => {
+              setIsCategoryModalOpen(open);
+              if (!open) resetCategoryForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="h-4 w-4 mr-2" />
+                  Nova Categoria
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+                  </DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCategorySubmit} className="space-y-4">
+                  <div>
+                    <Label htmlFor="categoryName">Nome da Categoria *</Label>
+                    <Input
+                      id="categoryName"
+                      value={categoryFormData.name}
+                      onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
+                      placeholder="Ex: Alimentação"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="categoryType">Tipo de Categoria</Label>
+                    <Select 
+                      value={categoryFormData.type} 
+                      onValueChange={(value: Database['public']['Enums']['category_type']) => 
+                        setCategoryFormData({ ...categoryFormData, type: value })
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o tipo" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {CATEGORY_TYPES.map((type) => (
+                          <SelectItem key={type.value} value={type.value}>
+                            {type.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Button type="button" variant="outline" onClick={() => setIsCategoryModalOpen(false)}>
+                      Cancelar
+                    </Button>
+                    <Button type="submit">
+                      {editingCategory ? 'Atualizar Categoria' : 'Salvar Categoria'}
+                    </Button>
+                  </div>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+
+        <Dialog open={isSubcategoryModalOpen} onOpenChange={(open) => {
+          setIsSubcategoryModalOpen(open);
+          if (!open) resetSubcategoryForm();
         }}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Nova Categoria
-            </Button>
-          </DialogTrigger>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editingCategory ? 'Editar Categoria' : 'Nova Categoria'}
+                {editingSubcategory ? 'Editar Subcategoria' : 'Nova Subcategoria'}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCategorySubmit} className="space-y-4">
+            <form onSubmit={handleSubcategorySubmit} className="space-y-4">
               <div>
-                <Label htmlFor="categoryName">Nome da Categoria *</Label>
+                <Label htmlFor="subcategoryName">Nome da Subcategoria *</Label>
                 <Input
-                  id="categoryName"
-                  value={categoryFormData.name}
-                  onChange={(e) => setCategoryFormData({ ...categoryFormData, name: e.target.value })}
-                  placeholder="Ex: Alimentação"
+                  id="subcategoryName"
+                  value={subcategoryFormData.name}
+                  onChange={(e) => setSubcategoryFormData({ ...subcategoryFormData, name: e.target.value })}
+                  placeholder="Ex: Restaurantes"
                   required
                 />
               </div>
-              <div>
-                <Label htmlFor="categoryType">Tipo de Categoria</Label>
-                <Select 
-                  value={categoryFormData.type} 
-                  onValueChange={(value: Database['public']['Enums']['category_type']) => 
-                    setCategoryFormData({ ...categoryFormData, type: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o tipo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {CATEGORY_TYPES.map((type) => (
-                      <SelectItem key={type.value} value={type.value}>
-                        {type.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="flex justify-end space-x-2">
-                <Button type="button" variant="outline" onClick={() => setIsCategoryModalOpen(false)}>
+                <Button type="button" variant="outline" onClick={() => setIsSubcategoryModalOpen(false)}>
                   Cancelar
                 </Button>
                 <Button type="submit">
-                  {editingCategory ? 'Atualizar Categoria' : 'Salvar Categoria'}
+                  {editingSubcategory ? 'Atualizar Subcategoria' : 'Salvar Subcategoria'}
                 </Button>
               </div>
             </form>
           </DialogContent>
         </Dialog>
-      </div>
 
-      <Dialog open={isSubcategoryModalOpen} onOpenChange={(open) => {
-        setIsSubcategoryModalOpen(open);
-        if (!open) resetSubcategoryForm();
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>
-              {editingSubcategory ? 'Editar Subcategoria' : 'Nova Subcategoria'}
-            </DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleSubcategorySubmit} className="space-y-4">
-            <div>
-              <Label htmlFor="subcategoryName">Nome da Subcategoria *</Label>
-              <Input
-                id="subcategoryName"
-                value={subcategoryFormData.name}
-                onChange={(e) => setSubcategoryFormData({ ...subcategoryFormData, name: e.target.value })}
-                placeholder="Ex: Restaurantes"
-                required
-              />
-            </div>
-            <div className="flex justify-end space-x-2">
-              <Button type="button" variant="outline" onClick={() => setIsSubcategoryModalOpen(false)}>
-                Cancelar
-              </Button>
-              <Button type="submit">
-                {editingSubcategory ? 'Atualizar Subcategoria' : 'Salvar Subcategoria'}
-              </Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {categories.length === 0 ? (
-        <div className="text-center py-8">
-          <p className="text-muted-foreground mb-4">
-            Nenhuma categoria cadastrada. Clique em "Nova Categoria" para começar.
-          </p>
-        </div>
-      ) : (
-        <Accordion type="multiple" className="w-full">
-          {categories.map((category) => (
-            <AccordionItem key={category.id} value={`category-${category.id}`}>
-              <AccordionTrigger className="hover:no-underline">
-                <div className="flex items-center justify-between w-full pr-4">
-                  <div className="flex items-center space-x-3">
-                    <span className="font-medium">{category.name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      ({getTypeLabel(category.type)})
-                    </span>
+        {categories.length === 0 ? (
+          <div className="text-center py-8">
+            <p className="text-muted-foreground mb-4">
+              Nenhuma categoria cadastrada. Clique em "Nova Categoria" para começar.
+            </p>
+          </div>
+        ) : (
+          <Accordion type="multiple" className="w-full">
+            {categories.map((category) => (
+              <AccordionItem key={category.id} value={`category-${category.id}`}>
+                <AccordionTrigger className="hover:no-underline">
+                  <div className="flex items-center justify-between w-full pr-4">
+                    <div className="flex items-center space-x-3">
+                      <span className="font-medium">{category.name}</span>
+                      <span className="text-sm text-muted-foreground">
+                        ({getTypeLabel(category.type)})
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleCategoryEdit(category);
+                        }}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Tem certeza que deseja excluir a categoria "{category.name}"? 
+                              As transações já associadas a ela não serão excluídas, mas ficarão sem categoria.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleCategoryDelete(category)}>
+                              Excluir
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
-                  <div className="flex items-center space-x-2">
+                </AccordionTrigger>
+                <AccordionContent>
+                  <div className="space-y-3 pl-4">
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleCategoryEdit(category);
-                      }}
+                      onClick={() => handleAddSubcategory(category.id)}
                     >
-                      <Edit className="h-4 w-4" />
+                      <Plus className="h-4 w-4 mr-2" />
+                      Adicionar Subcategoria
                     </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Tem certeza que deseja excluir a categoria "{category.name}"? 
-                            As transações já associadas a ela não serão excluídas, mas ficarão sem categoria.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => handleCategoryDelete(category)}>
-                            Excluir
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent>
-                <div className="space-y-3 pl-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleAddSubcategory(category.id)}
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Adicionar Subcategoria
-                  </Button>
-                  
-                  {category.subcategories && category.subcategories.length > 0 ? (
-                    <div className="space-y-2">
-                      {category.subcategories.map((subcategory) => (
-                        <div key={subcategory.id} className="flex items-center justify-between p-3 border rounded-md">
-                          <span>{subcategory.name}</span>
-                          <div className="flex items-center space-x-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleSubcategoryEdit(subcategory)}
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <AlertDialog>
-                              <AlertDialogTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
-                              </AlertDialogTrigger>
-                              <AlertDialogContent>
-                                <AlertDialogHeader>
-                                  <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-                                  <AlertDialogDescription>
-                                    Tem certeza que deseja excluir a subcategoria "{subcategory.name}"?
-                                    As transações já associadas a ela não serão excluídas, mas ficarão sem subcategoria.
-                                  </AlertDialogDescription>
-                                </AlertDialogHeader>
-                                <AlertDialogFooter>
-                                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                                  <AlertDialogAction onClick={() => handleSubcategoryDelete(subcategory)}>
-                                    Excluir
-                                  </AlertDialogAction>
-                                </AlertDialogFooter>
-                              </AlertDialogContent>
-                            </AlertDialog>
+                    
+                    {category.subcategories && category.subcategories.length > 0 ? (
+                      <div className="space-y-2">
+                        {category.subcategories.map((subcategory) => (
+                          <div key={subcategory.id} className="flex items-center justify-between p-3 border rounded-md">
+                            <span>{subcategory.name}</span>
+                            <div className="flex items-center space-x-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleSubcategoryEdit(subcategory)}
+                              >
+                                <Edit className="h-4 w-4" />
+                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button variant="outline" size="sm">
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Tem certeza que deseja excluir a subcategoria "{subcategory.name}"?
+                                      As transações já associadas a ela não serão excluídas, mas ficarão sem subcategoria.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => handleSubcategoryDelete(subcategory)}>
+                                      Excluir
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhuma subcategoria cadastrada.
-                    </p>
-                  )}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          ))}
-        </Accordion>
-      )}
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        Nenhuma subcategoria cadastrada.
+                      </p>
+                    )}
+                  </div>
+                </AccordionContent>
+              </AccordionItem>
+            ))}
+          </Accordion>
+        )}
       </div>
-      <FloatingTransactionButton />
     </div>
   );
 }

@@ -146,7 +146,26 @@ export default function ImportarTransacoes() {
       const line = lines[i].trim();
       if (!line) continue;
 
-      const columns = line.split(',').map(col => col.trim().replace(/"/g, ''));
+      // Split by comma, but handle quoted fields that may contain commas
+      const columns: string[] = [];
+      let currentField = '';
+      let insideQuotes = false;
+      
+      for (let j = 0; j < line.length; j++) {
+        const char = line[j];
+        
+        if (char === '"') {
+          insideQuotes = !insideQuotes;
+        } else if (char === ',' && !insideQuotes) {
+          columns.push(currentField.trim().replace(/^"(.+)"$/, '$1'));
+          currentField = '';
+        } else {
+          currentField += char;
+        }
+      }
+      
+      // Add the last field
+      columns.push(currentField.trim().replace(/^"(.+)"$/, '$1'));
       
       if (columns.length !== 3) {
         throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas, encontradas ${columns.length}`);
@@ -167,10 +186,23 @@ export default function ImportarTransacoes() {
         throw new Error(`Erro na linha ${i + 1}: data inválida`);
       }
 
-      // Parse amount
-      const amount = parseFloat(amountStr);
+      // Parse amount - handle Brazilian decimal format (comma as decimal separator)
+      // Replace comma with dot for decimal places
+      let normalizedAmount = amountStr.replace(',', '.');
+      
+      // Handle thousands separators - remove dots that are not decimal separators
+      // If there are multiple dots, keep only the last one as decimal separator
+      const dotCount = (normalizedAmount.match(/\./g) || []).length;
+      if (dotCount > 1) {
+        const parts = normalizedAmount.split('.');
+        const decimalPart = parts.pop(); // Last part is decimal
+        const integerPart = parts.join(''); // Join all other parts
+        normalizedAmount = integerPart + '.' + decimalPart;
+      }
+      
+      const amount = parseFloat(normalizedAmount);
       if (isNaN(amount)) {
-        throw new Error(`Erro na linha ${i + 1}: valor inválido`);
+        throw new Error(`Erro na linha ${i + 1}: valor inválido "${amountStr}"`);
       }
 
       rows.push({
@@ -399,7 +431,7 @@ export default function ImportarTransacoes() {
               <strong>Instruções:</strong> Seu arquivo CSV precisa ter 3 colunas, nesta ordem: 
               <br />1. <strong>Data</strong> (formato DD/MM/YYYY)
               <br />2. <strong>Descrição</strong> (texto)
-              <br />3. <strong>Valor</strong> (número - use valores negativos para despesas como -50.25 e positivos para receitas como 1200.00)
+              <br />3. <strong>Valor</strong> (número - use vírgula como separador decimal. Valores negativos para despesas como -50,25 e positivos para receitas como 1200,00)
             </AlertDescription>
           </Alert>
 
