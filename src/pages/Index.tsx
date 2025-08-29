@@ -1,6 +1,7 @@
 import React from 'react';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/contexts/AuthContext';
+import { FloatingTransactionButton } from '@/components/FloatingTransactionButton';
 
 const Index = () => {
   const { user } = useAuth();
@@ -21,6 +22,7 @@ const Index = () => {
           </p>
         </div>
       </main>
+      <FloatingTransactionButton />
     </div>
   );
 };

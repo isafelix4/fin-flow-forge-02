@@ -11,6 +11,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Edit, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
+import { FloatingTransactionButton } from '@/components/FloatingTransactionButton';
 
 import { Database } from '@/integrations/supabase/types';
 
@@ -546,7 +547,8 @@ export default function Categorias() {
           ))}
         </Accordion>
       )}
+      </div>
+      <FloatingTransactionButton />
     </div>
-  </div>
-);
+  );
 }

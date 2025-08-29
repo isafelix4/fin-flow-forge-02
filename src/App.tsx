@@ -13,6 +13,7 @@ import Categorias from "./pages/Categorias";
 import Investimentos from "./pages/Investimentos";
 import Dividas from "./pages/Dividas";
 import Transacoes from "./pages/Transacoes";
+import ImportarTransacoes from "./pages/ImportarTransacoes";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -72,6 +73,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Transacoes />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/importar" 
+              element={
+                <ProtectedRoute>
+                  <ImportarTransacoes />
                 </ProtectedRoute>
               } 
             />
