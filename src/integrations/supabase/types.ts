@@ -14,7 +14,296 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      accounts: {
+        Row: {
+          created_at: string
+          id: number
+          name: string
+          type: Database["public"]["Enums"]["account_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          name: string
+          type: Database["public"]["Enums"]["account_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          name?: string
+          type?: Database["public"]["Enums"]["account_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "accounts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      budgets: {
+        Row: {
+          budget_month: string
+          category_id: number
+          created_at: string
+          id: number
+          planned_amount: number
+          user_id: string
+        }
+        Insert: {
+          budget_month: string
+          category_id: number
+          created_at?: string
+          id?: number
+          planned_amount: number
+          user_id: string
+        }
+        Update: {
+          budget_month?: string
+          category_id?: number
+          created_at?: string
+          id?: number
+          planned_amount?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budgets_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "budgets_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      categories: {
+        Row: {
+          created_at: string
+          id: number
+          name: string
+          type: Database["public"]["Enums"]["category_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: number
+          name: string
+          type?: Database["public"]["Enums"]["category_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: number
+          name?: string
+          type?: Database["public"]["Enums"]["category_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "categories_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      debts: {
+        Row: {
+          created_at: string
+          current_balance: number
+          description: string
+          id: number
+          original_amount: number
+          remaining_installments: number | null
+          total_installments: number | null
+          type: Database["public"]["Enums"]["debt_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_balance: number
+          description: string
+          id?: number
+          original_amount: number
+          remaining_installments?: number | null
+          total_installments?: number | null
+          type: Database["public"]["Enums"]["debt_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_balance?: number
+          description?: string
+          id?: number
+          original_amount?: number
+          remaining_installments?: number | null
+          total_installments?: number | null
+          type?: Database["public"]["Enums"]["debt_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "debts_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      investments: {
+        Row: {
+          created_at: string
+          current_balance: number
+          id: number
+          initial_amount: number
+          name: string
+          type: Database["public"]["Enums"]["investment_type"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          current_balance: number
+          id?: number
+          initial_amount: number
+          name: string
+          type: Database["public"]["Enums"]["investment_type"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          current_balance?: number
+          id?: number
+          initial_amount?: number
+          name?: string
+          type?: Database["public"]["Enums"]["investment_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "investments_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      transactions: {
+        Row: {
+          account_id: number
+          amount: number
+          category_id: number | null
+          created_at: string
+          debt_id: number | null
+          description: string
+          id: number
+          investment_id: number | null
+          reference_month: string
+          transaction_date: string
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+        }
+        Insert: {
+          account_id: number
+          amount: number
+          category_id?: number | null
+          created_at?: string
+          debt_id?: number | null
+          description: string
+          id?: number
+          investment_id?: number | null
+          reference_month: string
+          transaction_date?: string
+          type: Database["public"]["Enums"]["transaction_type"]
+          user_id: string
+        }
+        Update: {
+          account_id?: number
+          amount?: number
+          category_id?: number | null
+          created_at?: string
+          debt_id?: number | null
+          description?: string
+          id?: number
+          investment_id?: number | null
+          reference_month?: string
+          transaction_date?: string
+          type?: Database["public"]["Enums"]["transaction_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "transactions_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_debt_id_fkey"
+            columns: ["debt_id"]
+            isOneToOne: false
+            referencedRelation: "debts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_investment_id_fkey"
+            columns: ["investment_id"]
+            isOneToOne: false
+            referencedRelation: "investments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +312,22 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      account_type:
+        | "Checking Account"
+        | "Meal Voucher"
+        | "Cash"
+        | "Credit Card"
+        | "Brokerage"
+        | "Other"
+      category_type: "Standard" | "Debt" | "Investment"
+      debt_type: "Financing" | "Loan" | "Credit Card" | "Consortium" | "Other"
+      investment_type:
+        | "Fixed Income"
+        | "Stocks"
+        | "Real Estate Fund"
+        | "Cryptocurrency"
+        | "Other"
+      transaction_type: "Expense" | "Income"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +454,25 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      account_type: [
+        "Checking Account",
+        "Meal Voucher",
+        "Cash",
+        "Credit Card",
+        "Brokerage",
+        "Other",
+      ],
+      category_type: ["Standard", "Debt", "Investment"],
+      debt_type: ["Financing", "Loan", "Credit Card", "Consortium", "Other"],
+      investment_type: [
+        "Fixed Income",
+        "Stocks",
+        "Real Estate Fund",
+        "Cryptocurrency",
+        "Other",
+      ],
+      transaction_type: ["Expense", "Income"],
+    },
   },
 } as const
