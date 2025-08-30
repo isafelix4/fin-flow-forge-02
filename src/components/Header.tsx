@@ -1,7 +1,7 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { LogOut, User, Home, CreditCard, FolderOpen, TrendingUp, Wallet, ArrowLeftRight, Upload } from 'lucide-react';
+import { LogOut, User, Home, CreditCard, FolderOpen, TrendingUp, Wallet, ArrowLeftRight, Upload, Calendar } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import {
   DropdownMenu,
@@ -19,6 +19,7 @@ export const Header = () => {
     { name: 'Contas', href: '/contas', icon: CreditCard },
     { name: 'Categorias', href: '/categorias', icon: FolderOpen },
     { name: 'Transações', href: '/transacoes', icon: ArrowLeftRight },
+    { name: 'Planejamento', href: '/planejamento', icon: Calendar },
     { name: 'Importar', href: '/importar', icon: Upload },
     { name: 'Investimentos', href: '/investimentos', icon: TrendingUp },
     { name: 'Dívidas', href: '/dividas', icon: Wallet },

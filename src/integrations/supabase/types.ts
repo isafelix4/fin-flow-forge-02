@@ -48,27 +48,33 @@ export type Database = {
       }
       budgets: {
         Row: {
-          budget_month: string
           category_id: number
           created_at: string
           id: number
+          plan_type: string
           planned_amount: number
+          reference_month: string
+          subcategory_id: number | null
           user_id: string
         }
         Insert: {
-          budget_month: string
           category_id: number
           created_at?: string
           id?: number
+          plan_type?: string
           planned_amount: number
+          reference_month: string
+          subcategory_id?: number | null
           user_id: string
         }
         Update: {
-          budget_month?: string
           category_id?: number
           created_at?: string
           id?: number
+          plan_type?: string
           planned_amount?: number
+          reference_month?: string
+          subcategory_id?: number | null
           user_id?: string
         }
         Relationships: [
