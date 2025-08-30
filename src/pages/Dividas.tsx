@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ const DEBT_TYPES = [
 function Dividas() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { referenceMonth } = useReferenceMonth();
   const [debts, setDebts] = useState<Debt[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -66,15 +68,24 @@ function Dividas() {
       fetchDebts();
       fetchMonthlyPayments();
     }
-  }, [user, sortBy, sortOrder]);
+  }, [user, sortBy, sortOrder, referenceMonth]);
 
   const fetchDebts = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('debts')
         .select('*')
-        .eq('user_id', user?.id)
-        .order(sortBy, { ascending: sortOrder === 'asc' });
+        .eq('user_id', user?.id);
+
+      // Handle special sorting for progress
+      if (sortBy === 'progress') {
+        query = query.order('original_amount', { ascending: sortOrder === 'asc' })
+                     .order('current_balance', { ascending: sortOrder === 'desc' });
+      } else {
+        query = query.order(sortBy, { ascending: sortOrder === 'asc' });
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setDebts(data || []);
@@ -90,18 +101,27 @@ function Dividas() {
     }
   };
 
-  const fetchMonthlyPayments = async (referenceMonth?: string) => {
+  const fetchMonthlyPayments = async () => {
     try {
-      // Use current month if no reference month provided
-      const targetMonth = referenceMonth || new Date().toISOString().slice(0, 7) + '-01';
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('name', 'Dívidas')
+        .single();
+
+      if (categoriesError) {
+        console.error('Error fetching Dívidas category:', categoriesError);
+        return;
+      }
 
       const { data, error } = await supabase
         .from('transactions')
         .select('amount')
         .eq('user_id', user?.id)
         .eq('type', 'Expense')
-        .not('debt_id', 'is', null)
-        .eq('reference_month', targetMonth);
+        .eq('category_id', categoriesData.id)
+        .eq('reference_month', referenceMonth);
 
       if (error) throw error;
       
@@ -459,7 +479,15 @@ function Dividas() {
                         {getSortIcon('remaining_installments')}
                       </div>
                     </TableHead>
-                    <TableHead>Progresso</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('progress')}
+                    >
+                      <div className="flex items-center">
+                        Progresso
+                        {getSortIcon('progress')}
+                      </div>
+                    </TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>

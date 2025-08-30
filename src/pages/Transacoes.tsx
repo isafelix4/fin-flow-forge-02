@@ -282,7 +282,15 @@ export default function Transacoes() {
                         {getSortIcon('category_id')}
                       </div>
                     </TableHead>
-                    <TableHead>Subcategoria</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('subcategory_id')}
+                    >
+                      <div className="flex items-center">
+                        Subcategoria
+                        {getSortIcon('subcategory_id')}
+                      </div>
+                    </TableHead>
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort('account_id')}

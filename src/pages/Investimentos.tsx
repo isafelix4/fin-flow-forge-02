@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,6 +39,7 @@ const INVESTMENT_TYPES = [
 function Investimentos() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { referenceMonth } = useReferenceMonth();
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -64,7 +66,7 @@ function Investimentos() {
       fetchInvestments();
       fetchMonthlyDeposits();
     }
-  }, [user, sortBy, sortOrder]);
+  }, [user, sortBy, sortOrder, referenceMonth]);
 
   const fetchInvestments = async () => {
     try {
@@ -88,18 +90,27 @@ function Investimentos() {
     }
   };
 
-  const fetchMonthlyDeposits = async (referenceMonth?: string) => {
+  const fetchMonthlyDeposits = async () => {
     try {
-      // Use current month if no reference month provided
-      const targetMonth = referenceMonth || new Date().toISOString().slice(0, 7) + '-01';
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('user_id', user?.id)
+        .eq('name', 'Investimentos')
+        .single();
+
+      if (categoriesError) {
+        console.error('Error fetching Investimentos category:', categoriesError);
+        return;
+      }
 
       const { data, error } = await supabase
         .from('transactions')
         .select('amount')
         .eq('user_id', user?.id)
         .eq('type', 'Expense')
-        .not('investment_id', 'is', null)
-        .eq('reference_month', targetMonth);
+        .eq('category_id', categoriesData.id)
+        .eq('reference_month', referenceMonth);
 
       if (error) throw error;
       
@@ -469,7 +480,15 @@ function Investimentos() {
                         {getSortIcon('type')}
                       </div>
                     </TableHead>
-                    <TableHead>Indicador</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('indicator')}
+                    >
+                      <div className="flex items-center">
+                        Indicador
+                        {getSortIcon('indicator')}
+                      </div>
+                    </TableHead>
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort('initial_amount')}

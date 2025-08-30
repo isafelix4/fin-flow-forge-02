@@ -107,14 +107,27 @@ const Index = () => {
         }))
         .sort((a, b) => b.amount - a.amount);
 
-      // Calculate expenses by subcategory
-      const subcategoryExpenses = transactions
+      // Calculate expenses by subcategory - properly grouped
+      const subcategoryMap = new Map<string, { amount: number, category: string }>();
+      transactions
         ?.filter(t => t.type === 'Expense' && t.subcategories?.name)
-        .map(t => ({
-          name: t.subcategories!.name,
-          amount: Number(t.amount),
-          category: t.categories?.name || 'Sem categoria'
-        })) || [];
+        .forEach(t => {
+          const subcategoryName = t.subcategories!.name;
+          const categoryName = t.categories?.name || 'Sem categoria';
+          const currentData = subcategoryMap.get(subcategoryName) || { amount: 0, category: categoryName };
+          subcategoryMap.set(subcategoryName, {
+            amount: currentData.amount + Number(t.amount),
+            category: categoryName
+          });
+        });
+
+      const subcategoryExpenses = Array.from(subcategoryMap.entries())
+        .map(([name, data]) => ({
+          name,
+          amount: data.amount,
+          category: data.category
+        }))
+        .sort((a, b) => b.amount - a.amount);
 
       // Get net worth (investments - debts)
       const [investmentsResponse, debtsResponse] = await Promise.all([
