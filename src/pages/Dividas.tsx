@@ -87,11 +87,10 @@ function Dividas() {
     }
   };
 
-  const fetchMonthlyPayments = async () => {
+  const fetchMonthlyPayments = async (referenceMonth?: string) => {
     try {
-      const currentDate = new Date();
-      const firstDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const lastDayOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
+      // Use current month if no reference month provided
+      const targetMonth = referenceMonth || new Date().toISOString().slice(0, 7) + '-01';
 
       const { data, error } = await supabase
         .from('transactions')
@@ -99,8 +98,7 @@ function Dividas() {
         .eq('user_id', user?.id)
         .eq('type', 'Expense')
         .not('debt_id', 'is', null)
-        .gte('transaction_date', firstDayOfMonth.toISOString().split('T')[0])
-        .lte('transaction_date', lastDayOfMonth.toISOString().split('T')[0]);
+        .eq('reference_month', targetMonth);
 
       if (error) throw error;
       

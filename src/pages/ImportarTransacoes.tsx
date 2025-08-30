@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, AlertCircle, CheckCircle, ArrowRight } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle, ArrowRight, Trash2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 import { Database } from '@/integrations/supabase/types';
@@ -57,6 +57,7 @@ interface ParsedTransaction {
   description: string;
   amount: number;
   type: Database['public']['Enums']['transaction_type'];
+  id?: string; // Temporary ID for tracking
 }
 
 export default function ImportarTransacoes() {
@@ -280,7 +281,8 @@ Verifique o formato do arquivo.`);
         date: date.toISOString().split('T')[0],
         description: description.trim(),
         amount: Math.abs(amount),
-        type: amount < 0 ? 'Expense' : 'Income'
+        type: amount < 0 ? 'Expense' : 'Income',
+        id: `temp-${Date.now()}-${i}` // Temporary ID for tracking
       });
     }
 
@@ -439,6 +441,23 @@ Verifique o formato do arquivo.`);
       [field]: value
     };
     setTransactionCategories(newCategories);
+  };
+
+  const handleDeleteTransaction = (index: number) => {
+    const newTransactions = parsedTransactions.filter((_, i) => i !== index);
+    const newCategories = transactionCategories.filter((_, i) => i !== index);
+    setParsedTransactions(newTransactions);
+    setTransactionCategories(newCategories);
+  };
+
+  const handleEditTransaction = (index: number, field: keyof ParsedTransaction, value: string | number) => {
+    const newTransactions = [...parsedTransactions];
+    if (field === 'amount') {
+      newTransactions[index] = { ...newTransactions[index], [field]: parseFloat(value as string) };
+    } else {
+      newTransactions[index] = { ...newTransactions[index], [field]: value };
+    }
+    setParsedTransactions(newTransactions);
   };
 
   const handleFinalImport = async () => {
@@ -673,7 +692,7 @@ Verifique o formato do arquivo.`);
                   </p>
                   
                   <div className="overflow-x-auto">
-                    <Table>
+                     <Table>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Data</TableHead>
@@ -683,6 +702,7 @@ Verifique o formato do arquivo.`);
                           <TableHead>Categoria</TableHead>
                           <TableHead>Subcategoria</TableHead>
                           <TableHead>Vínculo</TableHead>
+                          <TableHead>Ações</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -691,24 +711,44 @@ Verifique o formato do arquivo.`);
                           const availableSubcategories = getSubcategoriesForCategory(transactionCategories[index]?.category_id || '');
                           
                           return (
-                            <TableRow key={index}>
+                             <TableRow key={index}>
                               <TableCell className="text-sm">
-                                {new Date(transaction.date).toLocaleDateString('pt-BR')}
+                                <Input
+                                  type="date"
+                                  value={transaction.date}
+                                  onChange={(e) => handleEditTransaction(index, 'date', e.target.value)}
+                                  className="w-32"
+                                />
                               </TableCell>
-                              <TableCell className="text-sm font-medium max-w-[200px] truncate">
-                                {transaction.description}
+                              <TableCell className="text-sm font-medium">
+                                <Input
+                                  value={transaction.description}
+                                  onChange={(e) => handleEditTransaction(index, 'description', e.target.value)}
+                                  className="min-w-[200px]"
+                                />
                               </TableCell>
                               <TableCell className="text-sm">
-                                R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={transaction.amount}
+                                  onChange={(e) => handleEditTransaction(index, 'amount', e.target.value)}
+                                  className="w-24"
+                                />
                               </TableCell>
                               <TableCell>
-                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
-                                  transaction.type === 'Income' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {transaction.type === 'Income' ? 'Receita' : 'Despesa'}
-                                </span>
+                                <Select
+                                  value={transaction.type}
+                                  onValueChange={(value) => handleEditTransaction(index, 'type', value)}
+                                >
+                                  <SelectTrigger className="w-28">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background">
+                                    <SelectItem value="Expense">Despesa</SelectItem>
+                                    <SelectItem value="Income">Receita</SelectItem>
+                                  </SelectContent>
+                                </Select>
                               </TableCell>
                               <TableCell className="min-w-[150px]">
                                 <Select
@@ -780,11 +820,21 @@ Verifique o formato do arquivo.`);
                                     </SelectContent>
                                   </Select>
                                 )}
-                                {!categoryType && (
-                                  <span className="text-sm text-muted-foreground">-</span>
-                                )}
-                              </TableCell>
-                            </TableRow>
+                                 {!categoryType && (
+                                   <span className="text-sm text-muted-foreground">-</span>
+                                 )}
+                               </TableCell>
+                               <TableCell>
+                                 <Button
+                                   variant="outline"
+                                   size="sm"
+                                   onClick={() => handleDeleteTransaction(index)}
+                                   className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                                 >
+                                   <Trash2 className="h-4 w-4" />
+                                 </Button>
+                               </TableCell>
+                             </TableRow>
                           );
                         })}
                       </TableBody>

@@ -184,8 +184,60 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
     }
   };
 
-  const updatePatrimonyBalances = async (transactionData: any) => {
+  const updatePatrimonyBalances = async (transactionData: any, isEditing: boolean = false, oldTransaction: Transaction | null = null) => {
     try {
+      // First, revert the impact of old transaction if editing
+      if (isEditing && oldTransaction) {
+        if (oldTransaction.debt_id) {
+          const { data: debtData } = await supabase
+            .from('debts')
+            .select('current_balance, remaining_installments')
+            .eq('id', oldTransaction.debt_id)
+            .single();
+
+          if (debtData) {
+            // Revert debt payment - add back the amount
+            const revertedBalance = debtData.current_balance + oldTransaction.amount;
+            const revertedInstallments = debtData.remaining_installments !== null 
+              ? debtData.remaining_installments + 1 
+              : null;
+
+            await supabase
+              .from('debts')
+              .update({ 
+                current_balance: revertedBalance,
+                remaining_installments: revertedInstallments
+              })
+              .eq('id', oldTransaction.debt_id);
+          }
+        }
+
+        if (oldTransaction.investment_id) {
+          const { data: investmentData } = await supabase
+            .from('investments')
+            .select('current_balance')
+            .eq('id', oldTransaction.investment_id)
+            .single();
+
+          if (investmentData) {
+            let revertedBalance;
+            if (oldTransaction.type === 'Expense') {
+              // Revert aporte - decrease balance
+              revertedBalance = Math.max(0, investmentData.current_balance - oldTransaction.amount);
+            } else {
+              // Revert resgate - increase balance
+              revertedBalance = investmentData.current_balance + oldTransaction.amount;
+            }
+
+            await supabase
+              .from('investments')
+              .update({ current_balance: revertedBalance })
+              .eq('id', oldTransaction.investment_id);
+          }
+        }
+      }
+
+      // Now apply the new transaction impact
       if (transactionData.debt_id) {
         const { data: debtData } = await supabase
           .from('debts')
@@ -293,6 +345,9 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
         if (error) throw error;
 
+        // Update investment/debt balances for editing (revert old, apply new)
+        await updatePatrimonyBalances(transactionData, true, transaction);
+
         toast({
           title: "Sucesso",
           description: "Transação atualizada com sucesso"
@@ -304,14 +359,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
         if (error) throw error;
 
+        // Update investment/debt balances for new transaction
+        await updatePatrimonyBalances(transactionData);
+
         toast({
           title: "Sucesso", 
           description: "Transação criada com sucesso"
         });
       }
-
-      // Update investment/debt balances based on transaction
-      await updatePatrimonyBalances(transactionData);
 
       onClose();
       onTransactionSaved?.();
