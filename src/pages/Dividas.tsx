@@ -25,6 +25,7 @@ interface Debt {
   current_balance: number;
   total_installments: number | null;
   remaining_installments: number | null;
+  taxa_juros_mensal: number | null;
   created_at: string;
 }
 
@@ -52,6 +53,7 @@ function Dividas() {
     type: Database['public']['Enums']['debt_type'] | '';
     original_amount: string;
     current_balance: string;
+    taxa_juros_mensal: string;
     total_installments: string;
     remaining_installments: string;
   }>({
@@ -59,6 +61,7 @@ function Dividas() {
     type: '',
     original_amount: '',
     current_balance: '',
+    taxa_juros_mensal: '',
     total_installments: '',
     remaining_installments: ''
   });
@@ -77,10 +80,13 @@ function Dividas() {
         .select('*')
         .eq('user_id', user?.id);
 
-      // Handle special sorting for progress
+      // Handle special sorting for progress and taxa_juros_mensal
       if (sortBy === 'progress') {
         query = query.order('original_amount', { ascending: sortOrder === 'asc' })
                      .order('current_balance', { ascending: sortOrder === 'desc' });
+      } else if (sortBy === 'taxa_juros_mensal') {
+        // Sort with NULLS LAST for ascending or NULLS FIRST for descending
+        query = query.order('taxa_juros_mensal', { ascending: sortOrder === 'asc', nullsFirst: sortOrder === 'desc' });
       } else {
         query = query.order(sortBy, { ascending: sortOrder === 'asc' });
       }
@@ -150,6 +156,7 @@ function Dividas() {
         type: formData.type as Database['public']['Enums']['debt_type'],
         original_amount: parseFloat(formData.original_amount),
         current_balance: parseFloat(formData.current_balance),
+        taxa_juros_mensal: formData.taxa_juros_mensal ? parseFloat(formData.taxa_juros_mensal) : null,
         total_installments: formData.total_installments ? parseInt(formData.total_installments) : null,
         remaining_installments: formData.remaining_installments ? parseInt(formData.remaining_installments) : null,
         user_id: user?.id
@@ -187,6 +194,7 @@ function Dividas() {
         type: '', 
         original_amount: '', 
         current_balance: '', 
+        taxa_juros_mensal: '',
         total_installments: '', 
         remaining_installments: '' 
       });
@@ -208,6 +216,7 @@ function Dividas() {
       type: debt.type,
       original_amount: debt.original_amount.toString(),
       current_balance: debt.current_balance.toString(),
+      taxa_juros_mensal: debt.taxa_juros_mensal?.toString() || '',
       total_installments: debt.total_installments?.toString() || '',
       remaining_installments: debt.remaining_installments?.toString() || ''
     });
@@ -241,6 +250,19 @@ function Dividas() {
 
   const totalOriginalAmount = debts.reduce((sum, debt) => sum + debt.original_amount, 0);
   const totalCurrentBalance = debts.reduce((sum, debt) => sum + debt.current_balance, 0);
+
+  const calculateWeightedAverageInterestRate = () => {
+    const debtsWithInterest = debts.filter(debt => debt.taxa_juros_mensal !== null);
+    if (debtsWithInterest.length === 0) return 0;
+    
+    const totalWeightedRate = debtsWithInterest.reduce((sum, debt) => {
+      return sum + (debt.current_balance * debt.taxa_juros_mensal!);
+    }, 0);
+    
+    const totalBalance = debtsWithInterest.reduce((sum, debt) => sum + debt.current_balance, 0);
+    
+    return totalBalance > 0 ? totalWeightedRate / totalBalance : 0;
+  };
 
   const getTypeLabel = (type: string) => {
     return DEBT_TYPES.find(t => t.value === type)?.label || type;
@@ -294,6 +316,7 @@ function Dividas() {
                   type: '', 
                   original_amount: '', 
                   current_balance: '', 
+                  taxa_juros_mensal: '',
                   total_installments: '', 
                   remaining_installments: '' 
                 });
@@ -362,6 +385,17 @@ function Dividas() {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="taxa_juros_mensal">Taxa de Juros (% a.m.)</Label>
+                  <Input
+                    id="taxa_juros_mensal"
+                    type="number"
+                    step="0.01"
+                    value={formData.taxa_juros_mensal}
+                    onChange={(e) => setFormData({ ...formData, taxa_juros_mensal: e.target.value })}
+                    placeholder="Ex: 1.99"
+                  />
+                </div>
+                <div>
                   <Label htmlFor="total_installments">Número Total de Parcelas</Label>
                   <Input
                     id="total_installments"
@@ -395,7 +429,7 @@ function Dividas() {
         </div>
 
         {/* Cards de Resumo */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Valor Original</CardTitle>
@@ -417,6 +451,19 @@ function Dividas() {
               <div className="text-2xl font-bold">
                 R$ {totalCurrentBalance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Taxa Média de Juros</CardTitle>
+              <TrendingDown className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">
+                {calculateWeightedAverageInterestRate().toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+              </div>
+              <p className="text-xs text-muted-foreground">Média ponderada atual</p>
             </CardContent>
           </Card>
 
@@ -472,6 +519,15 @@ function Dividas() {
                     </TableHead>
                     <TableHead 
                       className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('taxa_juros_mensal')}
+                    >
+                      <div className="flex items-center">
+                        Taxa de Juros
+                        {getSortIcon('taxa_juros_mensal')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
                       onClick={() => handleSort('remaining_installments')}
                     >
                       <div className="flex items-center">
@@ -498,6 +554,12 @@ function Dividas() {
                       <TableCell>{getTypeLabel(debt.type)}</TableCell>
                       <TableCell>
                         R$ {debt.current_balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        {debt.taxa_juros_mensal 
+                          ? `${debt.taxa_juros_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+                          : 'N/A'
+                        }
                       </TableCell>
                       <TableCell>
                         {debt.remaining_installments || 'N/A'}

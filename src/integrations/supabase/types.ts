@@ -128,6 +128,7 @@ export type Database = {
           id: number
           original_amount: number
           remaining_installments: number | null
+          taxa_juros_mensal: number | null
           total_installments: number | null
           type: Database["public"]["Enums"]["debt_type"]
           user_id: string
@@ -139,6 +140,7 @@ export type Database = {
           id?: number
           original_amount: number
           remaining_installments?: number | null
+          taxa_juros_mensal?: number | null
           total_installments?: number | null
           type: Database["public"]["Enums"]["debt_type"]
           user_id: string
@@ -150,6 +152,7 @@ export type Database = {
           id?: number
           original_amount?: number
           remaining_installments?: number | null
+          taxa_juros_mensal?: number | null
           total_installments?: number | null
           type?: Database["public"]["Enums"]["debt_type"]
           user_id?: string
