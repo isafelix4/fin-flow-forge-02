@@ -80,8 +80,79 @@ export default function Transacoes() {
     setIsModalOpen(true);
   };
 
+  const revertTransactionImpact = async (transaction: Transaction) => {
+    try {
+      // Reverter impacto em dívidas
+      if (transaction.debt_id) {
+        const { data: debtData } = await supabase
+          .from('debts')
+          .select('current_balance, remaining_installments')
+          .eq('id', transaction.debt_id)
+          .single();
+
+        if (debtData) {
+          // Reverter pagamento de dívida - aumentar o saldo devedor
+          const revertedBalance = debtData.current_balance + transaction.amount;
+          const revertedInstallments = debtData.remaining_installments !== null 
+            ? debtData.remaining_installments + 1 
+            : null;
+
+          await supabase
+            .from('debts')
+            .update({ 
+              current_balance: revertedBalance,
+              remaining_installments: revertedInstallments
+            })
+            .eq('id', transaction.debt_id);
+        }
+      }
+
+      // Reverter impacto em investimentos
+      if (transaction.investment_id) {
+        const { data: investmentData } = await supabase
+          .from('investments')
+          .select('current_balance')
+          .eq('id', transaction.investment_id)
+          .single();
+
+        if (investmentData) {
+          let revertedBalance;
+          if (transaction.type === 'Expense') {
+            // Reverter aporte - diminuir o saldo
+            revertedBalance = Math.max(0, investmentData.current_balance - transaction.amount);
+          } else {
+            // Reverter resgate - aumentar o saldo
+            revertedBalance = investmentData.current_balance + transaction.amount;
+          }
+
+          await supabase
+            .from('investments')
+            .update({ current_balance: revertedBalance })
+            .eq('id', transaction.investment_id);
+        }
+      }
+    } catch (error) {
+      console.error('Error reverting transaction impact:', error);
+    }
+  };
+
   const handleDelete = async (id: number) => {
     try {
+      // Buscar a transação completa antes de excluir para reverter impactos
+      const { data: transactionToDelete, error: fetchError } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      // Reverter impactos nos saldos antes de excluir
+      if (transactionToDelete) {
+        await revertTransactionImpact(transactionToDelete);
+      }
+
+      // Excluir a transação
       const { error } = await supabase
         .from('transactions')
         .delete()
@@ -170,10 +241,10 @@ export default function Transacoes() {
                   {transactions.map((transaction) => (
                     <TableRow key={transaction.id}>
                       <TableCell>
-                        {new Date(transaction.reference_month).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                        {new Date(transaction.reference_month + 'T12:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                       </TableCell>
                       <TableCell>
-                        {new Date(transaction.transaction_date).toLocaleDateString('pt-BR')}
+                        {new Date(transaction.transaction_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                       </TableCell>
                       <TableCell className="font-medium">{transaction.description}</TableCell>
                       <TableCell>{transaction.categories?.name || 'Sem categoria'}</TableCell>

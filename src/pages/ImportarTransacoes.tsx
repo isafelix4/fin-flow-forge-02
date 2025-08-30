@@ -554,7 +554,7 @@ Verifique o formato do arquivo.`);
     const date = new Date();
     date.setMonth(date.getMonth() + i);
     const value = date.toISOString().slice(0, 7) + '-01';
-    const label = date.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+    const label = new Date(date.getFullYear(), date.getMonth(), 15).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
     return { value, label };
   });
 
