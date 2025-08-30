@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Database } from '@/integrations/supabase/types';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 
 interface Transaction {
   id: number;
@@ -400,14 +401,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
   const showDebtField = selectedCategory?.type === 'Debt';
   const showInvestmentField = selectedCategory?.type === 'Investment';
 
-  // Generate month options (current + next 11 months)
-  const monthOptions = Array.from({ length: 12 }, (_, i) => {
-    const date = new Date();
-    date.setMonth(date.getMonth() + i);
-    const value = date.toISOString().slice(0, 7) + '-01';
-    const label = new Date(date.getFullYear(), date.getMonth(), 15).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
-    return { value, label };
-  });
+  // Month/Year picker - now dynamic, no need for fixed options
 
   const handleClose = () => {
     onClose();
@@ -588,21 +582,11 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
 
               <div>
                 <Label htmlFor="reference_month">Mês de Referência *</Label>
-                <Select 
-                  value={formData.reference_month} 
+                <MonthYearPicker
+                  value={formData.reference_month}
                   onValueChange={(value) => setFormData({ ...formData, reference_month: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o mês" />
-                  </SelectTrigger>
-                  <SelectContent className="bg-background">
-                    {monthOptions.map((month) => (
-                      <SelectItem key={month.value} value={month.value}>
-                        {month.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Selecione o mês de referência"
+                />
               </div>
             </div>
 

@@ -12,6 +12,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Edit, Trash2, Plus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Database } from '@/integrations/supabase/types';
 
 interface Transaction {
@@ -565,15 +566,14 @@ export default function Transacoes() {
                       onChange={(e) => setFormData({ ...formData, transaction_date: e.target.value })}
                     />
                   </div>
-                  <div>
-                    <Label htmlFor="reference_month">Mês de Referência</Label>
-                    <Input
-                      id="reference_month"
-                      type="date"
-                      value={formData.reference_month}
-                      onChange={(e) => setFormData({ ...formData, reference_month: e.target.value })}
-                    />
-                  </div>
+                    <div>
+                      <Label htmlFor="reference_month">Mês de Referência</Label>
+                      <MonthYearPicker
+                        value={formData.reference_month}
+                        onValueChange={(value) => setFormData({ ...formData, reference_month: value })}
+                        placeholder="Selecione o mês de referência"
+                      />
+                    </div>
                 </div>
 
                 <div className="flex justify-end space-x-2">
