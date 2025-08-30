@@ -1,41 +1,52 @@
 import React, { useState, useEffect } from 'react';
 import { Header } from '@/components/Header';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 import { FloatingTransactionButton } from '@/components/FloatingTransactionButton';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format, startOfMonth } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Link } from 'react-router-dom';
+import { Upload, TrendingUp, Filter } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface DashboardData {
   income: number;
   expenses: number;
   balance: number;
+  netWorth: number;
   categoryExpenses: Array<{
     name: string;
     amount: number;
     percentage: number;
+  }>;
+  subcategoryExpenses: Array<{
+    name: string;
+    amount: number;
+    category: string;
   }>;
 }
 
 const Index = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const [selectedMonth, setSelectedMonth] = useState<string>(() => {
-    const now = new Date();
-    return format(startOfMonth(now), 'yyyy-MM-dd');
-  });
+  const { referenceMonth, setReferenceMonth } = useReferenceMonth();
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     income: 0,
     expenses: 0,
     balance: 0,
-    categoryExpenses: []
+    netWorth: 0,
+    categoryExpenses: [],
+    subcategoryExpenses: []
   });
   const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const loadDashboardData = async () => {
     if (!user) return;
@@ -51,10 +62,13 @@ const Index = () => {
           type,
           categories (
             name
+          ),
+          subcategories (
+            name
           )
         `)
         .eq('user_id', user.id)
-        .eq('reference_month', selectedMonth);
+        .eq('reference_month', referenceMonth);
 
       if (transactionsError) {
         console.error('Error fetching transactions:', transactionsError);
@@ -93,11 +107,38 @@ const Index = () => {
         }))
         .sort((a, b) => b.amount - a.amount);
 
+      // Calculate expenses by subcategory
+      const subcategoryExpenses = transactions
+        ?.filter(t => t.type === 'Expense' && t.subcategories?.name)
+        .map(t => ({
+          name: t.subcategories!.name,
+          amount: Number(t.amount),
+          category: t.categories?.name || 'Sem categoria'
+        })) || [];
+
+      // Get net worth (investments - debts)
+      const [investmentsResponse, debtsResponse] = await Promise.all([
+        supabase
+          .from('investments')
+          .select('current_balance')
+          .eq('user_id', user.id),
+        supabase
+          .from('debts')
+          .select('current_balance')
+          .eq('user_id', user.id)
+      ]);
+
+      const totalInvestments = investmentsResponse.data?.reduce((sum, inv) => sum + Number(inv.current_balance), 0) || 0;
+      const totalDebts = debtsResponse.data?.reduce((sum, debt) => sum + Number(debt.current_balance), 0) || 0;
+      const netWorth = totalInvestments - totalDebts;
+
       setDashboardData({
         income,
         expenses,
         balance: income - expenses,
-        categoryExpenses
+        netWorth,
+        categoryExpenses,
+        subcategoryExpenses
       });
 
     } catch (error) {
@@ -114,7 +155,7 @@ const Index = () => {
 
   useEffect(() => {
     loadDashboardData();
-  }, [selectedMonth, user]);
+  }, [referenceMonth, user]);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -130,6 +171,12 @@ const Index = () => {
     },
   };
 
+  const filteredSubcategoryExpenses = selectedCategory === 'all' 
+    ? dashboardData.subcategoryExpenses
+    : dashboardData.subcategoryExpenses.filter(sub => sub.category === selectedCategory);
+
+  const availableCategories = Array.from(new Set(dashboardData.subcategoryExpenses.map(sub => sub.category)));
+
   return (
     <div className="min-h-screen bg-background">
       <Header />
@@ -142,7 +189,15 @@ const Index = () => {
               Olá, {user?.user_metadata?.nome || user?.email}!
             </p>
           </div>
-          <FloatingTransactionButton />
+          <div className="flex gap-2">
+            <Link to="/importar">
+              <Button variant="outline">
+                <Upload className="h-4 w-4 mr-2" />
+                Importar CSV
+              </Button>
+            </Link>
+            <FloatingTransactionButton />
+          </div>
         </div>
 
         {/* Month Filter */}
@@ -151,15 +206,15 @@ const Index = () => {
             Período de referência:
           </label>
           <MonthYearPicker
-            value={selectedMonth}
-            onValueChange={setSelectedMonth}
+            value={referenceMonth}
+            onValueChange={setReferenceMonth}
             placeholder="Selecione o mês"
             className="w-full sm:w-auto"
           />
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -200,13 +255,30 @@ const Index = () => {
               </div>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Patrimônio Líquido
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${
+                dashboardData.netWorth >= 0 ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {loading ? '...' : formatCurrency(dashboardData.netWorth)}
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Expenses Chart */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Despesas por Categoria</CardTitle>
-          </CardHeader>
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Expenses Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Despesas por Categoria</CardTitle>
+            </CardHeader>
           <CardContent>
             {loading ? (
               <div className="h-80 flex items-center justify-center">
@@ -247,8 +319,72 @@ const Index = () => {
                 </ResponsiveContainer>
               </ChartContainer>
             )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+
+          {/* Subcategory Expenses Chart */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <CardTitle>Despesas por Subcategoria</CardTitle>
+                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {availableCategories.map((category) => (
+                      <SelectItem key={category} value={category}>
+                        {category}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="h-80 flex items-center justify-center">
+                  <p className="text-muted-foreground">Carregando...</p>
+                </div>
+              ) : filteredSubcategoryExpenses.length === 0 ? (
+                <div className="h-80 flex items-center justify-center">
+                  <p className="text-muted-foreground">
+                    Nenhuma subcategoria encontrada para o filtro selecionado
+                  </p>
+                </div>
+              ) : (
+                <ChartContainer config={chartConfig} className="h-80">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={filteredSubcategoryExpenses}>
+                      <XAxis 
+                        dataKey="name" 
+                        tick={{ fontSize: 12 }}
+                        angle={-45}
+                        textAnchor="end"
+                        height={100}
+                      />
+                      <YAxis 
+                        tick={{ fontSize: 12 }}
+                        tickFormatter={(value) => formatCurrency(value)}
+                      />
+                      <ChartTooltip 
+                        content={<ChartTooltipContent />}
+                        formatter={(value: any) => [formatCurrency(value), 'Valor']}
+                        labelFormatter={(label) => `Subcategoria: ${label}`}
+                      />
+                      <Bar 
+                        dataKey="amount" 
+                        fill="var(--color-amount)"
+                        radius={[4, 4, 0, 0]}
+                      />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </main>
     </div>
   );

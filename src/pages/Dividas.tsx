@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Plus, TrendingDown, CreditCard, DollarSign } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Edit, Trash2, Plus, TrendingDown, CreditCard, DollarSign, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 
@@ -42,6 +43,8 @@ function Dividas() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
   const [monthlyPayments, setMonthlyPayments] = useState<number>(0);
+  const [sortBy, setSortBy] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [formData, setFormData] = useState<{
     description: string;
     type: Database['public']['Enums']['debt_type'] | '';
@@ -63,7 +66,7 @@ function Dividas() {
       fetchDebts();
       fetchMonthlyPayments();
     }
-  }, [user]);
+  }, [user, sortBy, sortOrder]);
 
   const fetchDebts = async () => {
     try {
@@ -71,7 +74,7 @@ function Dividas() {
         .from('debts')
         .select('*')
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+        .order(sortBy, { ascending: sortOrder === 'asc' });
 
       if (error) throw error;
       setDebts(data || []);
@@ -221,6 +224,28 @@ function Dividas() {
 
   const getTypeLabel = (type: string) => {
     return DEBT_TYPES.find(t => t.value === type)?.label || type;
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-2" />;
+    }
+    return sortOrder === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-2" />
+      : <ArrowDown className="h-4 w-4 ml-2" />;
+  };
+
+  const calculateProgress = (originalAmount: number, currentBalance: number) => {
+    return ((originalAmount - currentBalance) / originalAmount) * 100;
   };
 
   if (loading) {
@@ -398,10 +423,43 @@ function Dividas() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Descrição da Dívida</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Saldo Devedor Atual</TableHead>
-                    <TableHead>Parcelas Restantes</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('description')}
+                    >
+                      <div className="flex items-center">
+                        Descrição da Dívida
+                        {getSortIcon('description')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('type')}
+                    >
+                      <div className="flex items-center">
+                        Tipo
+                        {getSortIcon('type')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('current_balance')}
+                    >
+                      <div className="flex items-center">
+                        Saldo Devedor Atual
+                        {getSortIcon('current_balance')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('remaining_installments')}
+                    >
+                      <div className="flex items-center">
+                        Parcelas Restantes
+                        {getSortIcon('remaining_installments')}
+                      </div>
+                    </TableHead>
+                    <TableHead>Progresso</TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -415,6 +473,17 @@ function Dividas() {
                       </TableCell>
                       <TableCell>
                         {debt.remaining_installments || 'N/A'}
+                      </TableCell>
+                      <TableCell>
+                        <div className="w-full max-w-20">
+                          <Progress 
+                            value={calculateProgress(debt.original_amount, debt.current_balance)} 
+                            className="h-2"
+                          />
+                          <span className="text-xs text-muted-foreground mt-1 block">
+                            {calculateProgress(debt.original_amount, debt.current_balance).toFixed(1)}%
+                          </span>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">

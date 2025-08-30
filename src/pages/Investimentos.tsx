@@ -9,7 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Plus, TrendingUp, Wallet, DollarSign } from 'lucide-react';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
+import { Edit, Trash2, Plus, TrendingUp, Wallet, DollarSign, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 
@@ -41,6 +43,8 @@ function Investimentos() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
   const [monthlyDeposits, setMonthlyDeposits] = useState<number>(0);
+  const [sortBy, setSortBy] = useState<string>('created_at');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [formData, setFormData] = useState<{
     name: string;
     type: Database['public']['Enums']['investment_type'] | '';
@@ -60,7 +64,7 @@ function Investimentos() {
       fetchInvestments();
       fetchMonthlyDeposits();
     }
-  }, [user]);
+  }, [user, sortBy, sortOrder]);
 
   const fetchInvestments = async () => {
     try {
@@ -68,7 +72,7 @@ function Investimentos() {
         .from('investments')
         .select('*')
         .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
+        .order(sortBy, { ascending: sortOrder === 'asc' });
 
       if (error) throw error;
       setInvestments(data || []);
@@ -209,6 +213,43 @@ function Investimentos() {
 
   const getTypeLabel = (type: string) => {
     return INVESTMENT_TYPES.find(t => t.value === type)?.label || type;
+  };
+
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-2" />;
+    }
+    return sortOrder === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-2" />
+      : <ArrowDown className="h-4 w-4 ml-2" />;
+  };
+
+  const allocationData = INVESTMENT_TYPES.map(type => {
+    const typeInvestments = investments.filter(inv => inv.type === type.value);
+    const totalBalance = typeInvestments.reduce((sum, inv) => sum + inv.current_balance, 0);
+    return {
+      name: type.label,
+      value: totalBalance,
+      count: typeInvestments.length
+    };
+  }).filter(item => item.value > 0);
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
+
+  const chartConfig = {
+    value: {
+      label: "Valor",
+      color: "hsl(var(--chart-1))",
+    },
   };
 
   if (loading) {
@@ -356,6 +397,50 @@ function Investimentos() {
           </Card>
         </div>
 
+        {/* Allocation Chart */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Alocação de Ativos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="h-80 flex items-center justify-center">
+                <p className="text-muted-foreground">Carregando...</p>
+              </div>
+            ) : allocationData.length === 0 ? (
+              <div className="h-80 flex items-center justify-center">
+                <p className="text-muted-foreground">
+                  Nenhum investimento encontrado
+                </p>
+              </div>
+            ) : (
+              <ChartContainer config={chartConfig} className="h-80">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={allocationData}
+                      cx="50%"
+                      cy="50%"
+                      outerRadius={120}
+                      innerRadius={60}
+                      dataKey="value"
+                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(1)}%`}
+                    >
+                      {allocationData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <ChartTooltip 
+                      content={<ChartTooltipContent />}
+                      formatter={(value: any) => [`R$ ${Number(value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, 'Valor']}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+              </ChartContainer>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Lista de Investimentos */}
         <Card>
           <CardHeader>
@@ -366,10 +451,43 @@ function Investimentos() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Nome do Ativo</TableHead>
-                    <TableHead>Tipo</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('name')}
+                    >
+                      <div className="flex items-center">
+                        Nome do Investimento
+                        {getSortIcon('name')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('type')}
+                    >
+                      <div className="flex items-center">
+                        Tipo
+                        {getSortIcon('type')}
+                      </div>
+                    </TableHead>
                     <TableHead>Indicador</TableHead>
-                    <TableHead>Saldo Atual</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('initial_amount')}
+                    >
+                      <div className="flex items-center">
+                        Valor Inicial
+                        {getSortIcon('initial_amount')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('current_balance')}
+                    >
+                      <div className="flex items-center">
+                        Saldo Atual
+                        {getSortIcon('current_balance')}
+                      </div>
+                    </TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -379,6 +497,9 @@ function Investimentos() {
                       <TableCell className="font-medium">{investment.name}</TableCell>
                       <TableCell>{getTypeLabel(investment.type)}</TableCell>
                       <TableCell>{investment.indicator || '-'}</TableCell>
+                      <TableCell>
+                        R$ {investment.initial_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </TableCell>
                       <TableCell>
                         R$ {investment.current_balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                       </TableCell>

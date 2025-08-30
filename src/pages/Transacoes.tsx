@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Plus, Upload } from 'lucide-react';
+import { Edit, Trash2, Plus, Upload, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 import { TransactionModal } from '@/components/TransactionModal';
@@ -39,12 +39,14 @@ export default function Transacoes() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [sortBy, setSortBy] = useState<string>('transaction_date');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
   useEffect(() => {
     if (user) {
       fetchTransactions();
     }
-  }, [user]);
+  }, [user, sortBy, sortOrder]);
 
   const fetchTransactions = async () => {
     try {
@@ -59,7 +61,7 @@ export default function Transacoes() {
           debts(description)
         `)
         .eq('user_id', user?.id)
-        .order('transaction_date', { ascending: false });
+        .order(sortBy, { ascending: sortOrder === 'asc' });
 
       if (error) throw error;
       setTransactions(data || []);
@@ -185,6 +187,24 @@ export default function Transacoes() {
     fetchTransactions();
   };
 
+  const handleSort = (column: string) => {
+    if (sortBy === column) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(column);
+      setSortOrder('asc');
+    }
+  };
+
+  const getSortIcon = (column: string) => {
+    if (sortBy !== column) {
+      return <ArrowUpDown className="h-4 w-4 ml-2" />;
+    }
+    return sortOrder === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-2" />
+      : <ArrowDown className="h-4 w-4 ml-2" />;
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -226,14 +246,70 @@ export default function Transacoes() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Mês de Referência</TableHead>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Categoria</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('reference_month')}
+                    >
+                      <div className="flex items-center">
+                        Mês de Referência
+                        {getSortIcon('reference_month')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('transaction_date')}
+                    >
+                      <div className="flex items-center">
+                        Data
+                        {getSortIcon('transaction_date')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('description')}
+                    >
+                      <div className="flex items-center">
+                        Descrição
+                        {getSortIcon('description')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('category_id')}
+                    >
+                      <div className="flex items-center">
+                        Categoria
+                        {getSortIcon('category_id')}
+                      </div>
+                    </TableHead>
                     <TableHead>Subcategoria</TableHead>
-                    <TableHead>Conta</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead>Valor</TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('account_id')}
+                    >
+                      <div className="flex items-center">
+                        Conta
+                        {getSortIcon('account_id')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('type')}
+                    >
+                      <div className="flex items-center">
+                        Tipo
+                        {getSortIcon('type')}
+                      </div>
+                    </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('amount')}
+                    >
+                      <div className="flex items-center">
+                        Valor
+                        {getSortIcon('amount')}
+                      </div>
+                    </TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -260,7 +336,11 @@ export default function Transacoes() {
                         </span>
                       </TableCell>
                       <TableCell>
-                        R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        <span className={`font-medium ${
+                          transaction.type === 'Income' ? 'text-green-600' : 'text-red-600'
+                        }`}>
+                          R$ {transaction.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
