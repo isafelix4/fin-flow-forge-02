@@ -31,6 +31,14 @@ interface PlanejamentoItem {
   realizado: number;
 }
 
+interface AggregatedPlanejamento {
+  category_id: number;
+  category_name: string;
+  planned_amount: number;
+  realizado: number;
+  items: PlanejamentoItem[];
+}
+
 const Planejamento = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -49,8 +57,8 @@ const Planejamento = () => {
     saldoAtual: 0,
   });
 
-  const [planejamentosReceita, setPlanejamentosReceita] = useState<PlanejamentoItem[]>([]);
-  const [planejamentosDespesa, setPlanejamentosDespesa] = useState<PlanejamentoItem[]>([]);
+  const [planejamentosReceita, setPlanejamentosReceita] = useState<AggregatedPlanejamento[]>([]);
+  const [planejamentosDespesa, setPlanejamentosDespesa] = useState<AggregatedPlanejamento[]>([]);
 
   const loadPlanejamentoData = async () => {
     if (!user) return;
@@ -152,8 +160,12 @@ const Planejamento = () => {
         };
       });
 
-      setPlanejamentosReceita(processedReceitas);
-      setPlanejamentosDespesa(processedDespesas);
+      // Aggregate by category for display
+      const aggregateReceitas = aggregateByCategory(processedReceitas, transactions || [], 'Income');
+      const aggregateDespesas = aggregateByCategory(processedDespesas, transactions || [], 'Expense');
+
+      setPlanejamentosReceita(aggregateReceitas);
+      setPlanejamentosDespesa(aggregateDespesas);
 
       // Calculate summary data
       const receitaPlanejada = processedReceitas.reduce((sum, item) => sum + item.planned_amount, 0);
@@ -210,6 +222,53 @@ const Planejamento = () => {
     setModalType(type);
     setEditingItem(null);
     setIsModalOpen(true);
+  };
+
+  const aggregateByCategory = (items: PlanejamentoItem[], transactions: any[], transactionType: 'Income' | 'Expense'): AggregatedPlanejamento[] => {
+    const categoryMap = new Map<number, AggregatedPlanejamento>();
+
+    items.forEach(item => {
+      const existing = categoryMap.get(item.category_id);
+      if (existing) {
+        existing.planned_amount += item.planned_amount;
+        existing.realizado += item.realizado;
+        existing.items.push(item);
+      } else {
+        categoryMap.set(item.category_id, {
+          category_id: item.category_id,
+          category_name: item.category_name,
+          planned_amount: item.planned_amount,
+          realizado: item.realizado,
+          items: [item]
+        });
+      }
+    });
+
+    // Calculate total realized amount per category including transactions without budget items
+    transactions.filter(t => t.type === transactionType).forEach(transaction => {
+      const existing = categoryMap.get(transaction.category_id);
+      if (existing) {
+        // Already calculated above from individual items
+        return;
+      } else {
+        // This category has transactions but no budget planning
+        const categoryRealizado = transactions
+          .filter(t => t.type === transactionType && t.category_id === transaction.category_id)
+          .reduce((sum, t) => sum + Number(t.amount), 0);
+        
+        if (categoryRealizado > 0) {
+          categoryMap.set(transaction.category_id, {
+            category_id: transaction.category_id,
+            category_name: `Categoria ${transaction.category_id}`, // Will need to get real name
+            planned_amount: 0,
+            realizado: categoryRealizado,
+            items: []
+          });
+        }
+      }
+    });
+
+    return Array.from(categoryMap.values());
   };
 
   const handleEditPlanejamento = (item: PlanejamentoItem) => {
@@ -377,40 +436,56 @@ const Planejamento = () => {
               </p>
             ) : (
               <div className="space-y-4">
-                {planejamentosReceita.map((item) => (
-                  <div key={item.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div className="flex-1">
-                      <div className="font-medium">{item.category_name}</div>
-                      {item.subcategory_name && (
-                        <div className="text-sm text-muted-foreground">{item.subcategory_name}</div>
-                      )}
-                      <div className="flex gap-4 mt-2">
-                        <div>
-                          <span className="text-sm text-muted-foreground">Planejado: </span>
-                          <span className="font-medium">{formatCurrency(item.planned_amount)}</span>
-                        </div>
-                        <div>
-                          <span className="text-sm text-muted-foreground">Realizado: </span>
-                          <span className="font-medium text-green-600">{formatCurrency(item.realizado)}</span>
-                        </div>
+                {planejamentosReceita.map((category) => (
+                  <div key={category.category_id} className="p-4 border rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="font-medium">{category.category_name}</div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => category.items.length > 0 && handleEditPlanejamento(category.items[0])}
+                          disabled={category.items.length === 0}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        {category.items.map(item => (
+                          <Button
+                            key={item.id}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeletePlanejamento(item.id)}
+                            title={`Excluir: ${item.subcategory_name || 'Categoria geral'}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ))}
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditPlanejamento(item)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDeletePlanejamento(item.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    
+                    <div className="flex gap-4">
+                      <div>
+                        <span className="text-sm text-muted-foreground">Planejado: </span>
+                        <span className="font-medium">{formatCurrency(category.planned_amount)}</span>
+                      </div>
+                      <div>
+                        <span className="text-sm text-muted-foreground">Realizado: </span>
+                        <span className="font-medium text-green-600">{formatCurrency(category.realizado)}</span>
+                      </div>
                     </div>
+
+                    {/* Show individual subcategory breakdowns */}
+                    {category.items.length > 1 && (
+                      <div className="mt-3 pl-4 border-l-2 border-muted">
+                        <div className="text-xs text-muted-foreground mb-2">Detalhamento:</div>
+                        {category.items.map(item => (
+                          <div key={item.id} className="text-xs flex justify-between">
+                            <span>{item.subcategory_name || 'Categoria geral'}</span>
+                            <span>{formatCurrency(item.planned_amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
@@ -436,45 +511,45 @@ const Planejamento = () => {
               </p>
             ) : (
               <div className="space-y-4">
-                {planejamentosDespesa.map((item) => {
-                  const percentage = item.planned_amount > 0 ? (item.realizado / item.planned_amount) * 100 : 0;
-                  const remaining = item.planned_amount - item.realizado;
+                {planejamentosDespesa.map((category) => {
+                  const percentage = category.planned_amount > 0 ? (category.realizado / category.planned_amount) * 100 : 0;
+                  const remaining = category.planned_amount - category.realizado;
                   
                   return (
-                    <div key={item.id} className="p-4 border rounded-lg">
+                    <div key={category.category_id} className="p-4 border rounded-lg">
                       <div className="flex items-center justify-between mb-3">
-                        <div>
-                          <div className="font-medium">{item.category_name}</div>
-                          {item.subcategory_name && (
-                            <div className="text-sm text-muted-foreground">{item.subcategory_name}</div>
-                          )}
-                        </div>
+                        <div className="font-medium">{category.category_name}</div>
                         <div className="flex gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleEditPlanejamento(item)}
+                            onClick={() => category.items.length > 0 && handleEditPlanejamento(category.items[0])}
+                            disabled={category.items.length === 0}
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleDeletePlanejamento(item.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          {category.items.map(item => (
+                            <Button
+                              key={item.id}
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDeletePlanejamento(item.id)}
+                              title={`Excluir: ${item.subcategory_name || 'Categoria geral'}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ))}
                         </div>
                       </div>
                       
                       <div className="grid grid-cols-3 gap-4 mb-3">
                         <div>
                           <span className="text-sm text-muted-foreground">Planejado: </span>
-                          <span className="font-medium">{formatCurrency(item.planned_amount)}</span>
+                          <span className="font-medium">{formatCurrency(category.planned_amount)}</span>
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Gasto: </span>
-                          <span className="font-medium text-red-600">{formatCurrency(item.realizado)}</span>
+                          <span className="font-medium text-red-600">{formatCurrency(category.realizado)}</span>
                         </div>
                         <div>
                           <span className="text-sm text-muted-foreground">Restante: </span>
@@ -483,20 +558,34 @@ const Planejamento = () => {
                           </span>
                         </div>
                       </div>
-                      
+
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm">
-                          <span>Progresso: {formatPercentage(percentage)}</span>
+                          <span>Progresso:</span>
+                          <span>{formatPercentage(percentage)}</span>
                         </div>
                         <Progress 
                           value={Math.min(percentage, 100)} 
                           className={`h-2 ${
-                            percentage < 80 ? '[&>div]:bg-green-500' :
-                            percentage < 100 ? '[&>div]:bg-yellow-500' :
-                            '[&>div]:bg-red-500'
-                          }`} 
+                            percentage > 100 ? '[&>div]:bg-red-500' : 
+                            percentage > 80 ? '[&>div]:bg-yellow-500' : 
+                            '[&>div]:bg-green-500'
+                          }`}
                         />
                       </div>
+
+                      {/* Show individual subcategory breakdowns */}
+                      {category.items.length > 1 && (
+                        <div className="mt-3 pl-4 border-l-2 border-muted">
+                          <div className="text-xs text-muted-foreground mb-2">Detalhamento:</div>
+                          {category.items.map(item => (
+                            <div key={item.id} className="text-xs flex justify-between">
+                              <span>{item.subcategory_name || 'Categoria geral'}</span>
+                              <span>{formatCurrency(item.planned_amount)} / {formatCurrency(item.realizado)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}

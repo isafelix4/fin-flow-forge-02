@@ -12,9 +12,9 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
 const planejamentoSchema = z.object({
-  category_id: z.string().min(1, "Categoria é obrigatória"),
-  subcategory_id: z.string().optional(),
-  planned_amount: z.string().min(1, "Valor planejado é obrigatório"),
+  category_id: z.number().min(1, "Categoria é obrigatória"),
+  subcategory_id: z.number().optional(),
+  planned_amount: z.number().min(0.01, "Valor planejado é obrigatório"),
 });
 
 type PlanejamentoFormData = z.infer<typeof planejamentoSchema>;
@@ -62,45 +62,46 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
   const { toast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
+  const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
+  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
+  const [plannedAmount, setPlannedAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
 
   const {
-    register,
     handleSubmit,
     formState: { errors },
-    reset,
-    setValue,
-    watch,
+    setError,
+    clearErrors,
   } = useForm<PlanejamentoFormData>({
     resolver: zodResolver(planejamentoSchema),
   });
 
-  const watchedCategoryId = watch('category_id');
-
+  // Load categories when modal opens
   useEffect(() => {
     if (isOpen) {
       loadCategories();
+      resetForm();
+      
+      // Pre-populate form if editing
       if (editingItem) {
-        setValue('category_id', editingItem.category_id.toString());
-        setValue('subcategory_id', editingItem.subcategory_id?.toString() || '');
-        setValue('planned_amount', editingItem.planned_amount.toString());
-        setSelectedCategoryId(editingItem.category_id.toString());
-      } else {
-        reset();
-        setSelectedCategoryId('');
+        setSelectedCategoryId(editingItem.category_id);
+        setSelectedSubcategoryId(editingItem.subcategory_id);
+        setPlannedAmount(editingItem.planned_amount.toString());
+        // Load subcategories for the selected category
+        if (editingItem.category_id) {
+          loadSubcategories(editingItem.category_id);
+        }
       }
     }
-  }, [isOpen, editingItem, setValue, reset]);
+  }, [isOpen, editingItem]);
 
-  useEffect(() => {
-    if (watchedCategoryId) {
-      setSelectedCategoryId(watchedCategoryId);
-      loadSubcategories(parseInt(watchedCategoryId));
-    } else {
-      setSubcategories([]);
-    }
-  }, [watchedCategoryId]);
+  const resetForm = () => {
+    setSelectedCategoryId(null);
+    setSelectedSubcategoryId(null);
+    setPlannedAmount('');
+    setSubcategories([]);
+    clearErrors();
+  };
 
   const loadCategories = async () => {
     if (!user) return;
@@ -147,6 +148,49 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
     }
   };
 
+  const handleCategoryChange = (categoryId: string) => {
+    const id = parseInt(categoryId);
+    setSelectedCategoryId(id);
+    setSelectedSubcategoryId(null); // Reset subcategory when category changes
+    loadSubcategories(id);
+    clearErrors();
+  };
+
+  const handleSubcategoryChange = (subcategoryId: string) => {
+    setSelectedSubcategoryId(subcategoryId ? parseInt(subcategoryId) : null);
+    clearErrors();
+  };
+
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setPlannedAmount(e.target.value);
+    clearErrors();
+  };
+
+  const validateAndSubmit = () => {
+    // Clear previous errors
+    clearErrors();
+
+    // Manual validation
+    const amount = parseFloat(plannedAmount.replace(',', '.'));
+    
+    if (!selectedCategoryId) {
+      setError('category_id', { message: 'Categoria é obrigatória' });
+      return;
+    }
+    
+    if (!plannedAmount || isNaN(amount) || amount <= 0) {
+      setError('planned_amount', { message: 'Valor planejado é obrigatório e deve ser maior que zero' });
+      return;
+    }
+
+    // If validation passes, call the submit function
+    handleSubmit(() => onSubmit({
+      category_id: selectedCategoryId,
+      subcategory_id: selectedSubcategoryId || undefined,
+      planned_amount: amount,
+    }))();
+  };
+
   const onSubmit = async (data: PlanejamentoFormData) => {
     if (!user) return;
 
@@ -155,9 +199,9 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
 
       const budgetData = {
         user_id: user.id,
-        category_id: parseInt(data.category_id),
-        subcategory_id: data.subcategory_id ? parseInt(data.subcategory_id) : null,
-        planned_amount: parseFloat(data.planned_amount.replace(',', '.')),
+        category_id: data.category_id,
+        subcategory_id: data.subcategory_id || null,
+        planned_amount: data.planned_amount,
         plan_type: type,
         reference_month: referenceMonth,
       };
@@ -209,10 +253,13 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
           </DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+        <div className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="category_id">Categoria *</Label>
-            <Select {...register('category_id')} onValueChange={(value) => setValue('category_id', value)}>
+            <Select 
+              value={selectedCategoryId?.toString() || ''} 
+              onValueChange={handleCategoryChange}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Selecione uma categoria" />
               </SelectTrigger>
@@ -232,7 +279,10 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
           {selectedCategoryId && subcategories.length > 0 && (
             <div className="space-y-2">
               <Label htmlFor="subcategory_id">Subcategoria</Label>
-              <Select {...register('subcategory_id')} onValueChange={(value) => setValue('subcategory_id', value)}>
+              <Select 
+                value={selectedSubcategoryId?.toString() || ''} 
+                onValueChange={handleSubcategoryChange}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione uma subcategoria (opcional)" />
                 </SelectTrigger>
@@ -256,7 +306,8 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
               step="0.01"
               min="0"
               placeholder="0,00"
-              {...register('planned_amount')}
+              value={plannedAmount}
+              onChange={handleAmountChange}
             />
             {errors.planned_amount && (
               <p className="text-sm text-destructive">{errors.planned_amount.message}</p>
@@ -267,11 +318,11 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
             <Button type="button" variant="outline" onClick={onClose}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button onClick={validateAndSubmit} disabled={loading}>
               {loading ? 'Salvando...' : 'Salvar Planejamento'}
             </Button>
           </div>
-        </form>
+        </div>
       </DialogContent>
     </Dialog>
   );
