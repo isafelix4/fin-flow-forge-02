@@ -175,6 +175,7 @@ export type Database = {
           indicator: string | null
           initial_amount: number
           name: string
+          rentabilidade: number | null
           type: Database["public"]["Enums"]["investment_type"]
           user_id: string
         }
@@ -185,6 +186,7 @@ export type Database = {
           indicator?: string | null
           initial_amount: number
           name: string
+          rentabilidade?: number | null
           type: Database["public"]["Enums"]["investment_type"]
           user_id: string
         }
@@ -195,6 +197,7 @@ export type Database = {
           indicator?: string | null
           initial_amount?: number
           name?: string
+          rentabilidade?: number | null
           type?: Database["public"]["Enums"]["investment_type"]
           user_id?: string
         }

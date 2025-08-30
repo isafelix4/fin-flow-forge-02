@@ -25,6 +25,7 @@ interface Investment {
   initial_amount: number;
   current_balance: number;
   indicator?: string;
+  rentabilidade?: number;
   created_at: string;
 }
 
@@ -51,12 +52,14 @@ function Investimentos() {
     name: string;
     type: Database['public']['Enums']['investment_type'] | '';
     indicator: string;
+    rentabilidade: string;
     initial_amount: string;
     current_balance: string;
   }>({
     name: '',
     type: '',
     indicator: '',
+    rentabilidade: '',
     initial_amount: '',
     current_balance: ''
   });
@@ -70,11 +73,23 @@ function Investimentos() {
 
   const fetchInvestments = async () => {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('investments')
         .select('*')
-        .eq('user_id', user?.id)
-        .order(sortBy, { ascending: sortOrder === 'asc' });
+        .eq('user_id', user?.id);
+
+      // Handle sorting with NULL values for rentabilidade
+      if (sortBy === 'rentabilidade') {
+        if (sortOrder === 'asc') {
+          query = query.order('rentabilidade', { ascending: true, nullsFirst: false });
+        } else {
+          query = query.order('rentabilidade', { ascending: false, nullsFirst: false });
+        }
+      } else {
+        query = query.order(sortBy, { ascending: sortOrder === 'asc' });
+      }
+
+      const { data, error } = await query;
 
       if (error) throw error;
       setInvestments(data || []);
@@ -138,6 +153,7 @@ function Investimentos() {
         name: formData.name,
         type: formData.type as Database['public']['Enums']['investment_type'],
         indicator: formData.indicator || null,
+        rentabilidade: formData.rentabilidade ? parseFloat(formData.rentabilidade) : null,
         initial_amount: parseFloat(formData.initial_amount),
         current_balance: parseFloat(formData.current_balance),
         user_id: user?.id
@@ -170,7 +186,7 @@ function Investimentos() {
 
       setIsModalOpen(false);
       setEditingInvestment(null);
-      setFormData({ name: '', type: '', indicator: '', initial_amount: '', current_balance: '' });
+      setFormData({ name: '', type: '', indicator: '', rentabilidade: '', initial_amount: '', current_balance: '' });
       fetchInvestments();
     } catch (error) {
       console.error('Error saving investment:', error);
@@ -188,6 +204,7 @@ function Investimentos() {
       name: investment.name,
       type: investment.type,
       indicator: investment.indicator || '',
+      rentabilidade: investment.rentabilidade?.toString() || '',
       initial_amount: investment.initial_amount.toString(),
       current_balance: investment.current_balance.toString()
     });
@@ -221,6 +238,21 @@ function Investimentos() {
 
   const totalCurrentBalance = investments.reduce((sum, inv) => sum + inv.current_balance, 0);
   const activeInvestments = investments.filter(inv => inv.current_balance > 0).length;
+  
+  // Calculate weighted average profitability
+  const calculateAverageProfitability = () => {
+    const investmentsWithProfitability = investments.filter(inv => inv.rentabilidade != null && inv.current_balance > 0);
+    if (investmentsWithProfitability.length === 0) return 0;
+    
+    const totalWeightedProfitability = investmentsWithProfitability.reduce(
+      (sum, inv) => sum + (inv.current_balance * (inv.rentabilidade || 0)), 0
+    );
+    const totalBalance = investmentsWithProfitability.reduce((sum, inv) => sum + inv.current_balance, 0);
+    
+    return totalBalance > 0 ? totalWeightedProfitability / totalBalance : 0;
+  };
+  
+  const averageProfitability = calculateAverageProfitability();
 
   const getTypeLabel = (type: string) => {
     return INVESTMENT_TYPES.find(t => t.value === type)?.label || type;
@@ -284,7 +316,7 @@ function Investimentos() {
             <DialogTrigger asChild>
               <Button onClick={() => {
                 setEditingInvestment(null);
-                setFormData({ name: '', type: '', indicator: '', initial_amount: '', current_balance: '' });
+                setFormData({ name: '', type: '', indicator: '', rentabilidade: '', initial_amount: '', current_balance: '' });
               }}>
                 <Plus className="h-4 w-4 mr-2" />
                 Adicionar Investimento
@@ -335,6 +367,17 @@ function Investimentos() {
                   />
                 </div>
                 <div>
+                  <Label htmlFor="rentabilidade">Rentabilidade (%)</Label>
+                  <Input
+                    id="rentabilidade"
+                    type="number"
+                    step="0.01"
+                    value={formData.rentabilidade}
+                    onChange={(e) => setFormData({ ...formData, rentabilidade: e.target.value })}
+                    placeholder="Ex: 1.15"
+                  />
+                </div>
+                <div>
                   <Label htmlFor="initial_amount">Valor Aplicado (Inicial) *</Label>
                   <Input
                     id="initial_amount"
@@ -372,7 +415,7 @@ function Investimentos() {
         </div>
 
         {/* Cards de Resumo */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Saldo Atual</CardTitle>
@@ -404,6 +447,19 @@ function Investimentos() {
               <div className="text-2xl font-bold">
                 R$ {monthlyDeposits.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
               </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Rentabilidade Média</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${averageProfitability >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {averageProfitability.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+              </div>
+              <p className="text-xs text-muted-foreground">Média ponderada da carteira</p>
             </CardContent>
           </Card>
         </div>
@@ -507,6 +563,15 @@ function Investimentos() {
                         {getSortIcon('current_balance')}
                       </div>
                     </TableHead>
+                    <TableHead 
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => handleSort('rentabilidade')}
+                    >
+                      <div className="flex items-center">
+                        Rentabilidade
+                        {getSortIcon('rentabilidade')}
+                      </div>
+                    </TableHead>
                     <TableHead>Ações</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -521,6 +586,15 @@ function Investimentos() {
                       </TableCell>
                       <TableCell>
                         R$ {investment.current_balance.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        {investment.rentabilidade != null ? (
+                          <span className={`font-medium ${investment.rentabilidade >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                            {investment.rentabilidade.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
                       </TableCell>
                       <TableCell>
                         <div className="flex space-x-2">
