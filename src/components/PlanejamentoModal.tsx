@@ -60,12 +60,15 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  
+  // Estado local isolado para o modal
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState<number | null>(null);
   const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<number | null>(null);
   const [plannedAmount, setPlannedAmount] = useState<string>('');
   const [loading, setLoading] = useState(false);
+  const [loadingSubcategories, setLoadingSubcategories] = useState(false);
 
   const {
     handleSubmit,
@@ -76,33 +79,38 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
     resolver: zodResolver(planejamentoSchema),
   });
 
-  // Load categories when modal opens
+  // Reset e carregamento quando modal abre
   useEffect(() => {
     if (isOpen) {
-      loadCategories();
       resetForm();
+      loadCategories();
       
-      // Pre-populate form if editing
+      // Pre-popular formulário se editando
       if (editingItem) {
-        setSelectedCategoryId(editingItem.category_id);
-        setSelectedSubcategoryId(editingItem.subcategory_id);
-        setPlannedAmount(editingItem.planned_amount.toString());
-        // Load subcategories for the selected category
-        if (editingItem.category_id) {
-          loadSubcategories(editingItem.category_id);
-        }
+        setTimeout(() => {
+          setSelectedCategoryId(editingItem.category_id);
+          setSelectedSubcategoryId(editingItem.subcategory_id);
+          setPlannedAmount(editingItem.planned_amount.toString());
+          // Carregar subcategorias para a categoria selecionada
+          if (editingItem.category_id) {
+            loadSubcategories(editingItem.category_id);
+          }
+        }, 100); // Pequeno delay para garantir que o modal esteja renderizado
       }
     }
   }, [isOpen, editingItem]);
 
+  // Limpar formulário e estado
   const resetForm = () => {
     setSelectedCategoryId(null);
     setSelectedSubcategoryId(null);
     setPlannedAmount('');
     setSubcategories([]);
+    setLoadingSubcategories(false);
     clearErrors();
   };
 
+  // Carregar categorias com tratamento defensivo
   const loadCategories = async () => {
     if (!user) return;
 
@@ -114,9 +122,12 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
         .order('name');
 
       if (error) throw error;
+      
+      // Sempre usar array vazio como fallback
       setCategories(data || []);
     } catch (error) {
       console.error('Error loading categories:', error);
+      setCategories([]); // Estado seguro em caso de erro
       toast({
         title: "Erro",
         description: "Não foi possível carregar as categorias.",
@@ -125,10 +136,17 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
     }
   };
 
+  // Carregar subcategorias com programação defensiva
   const loadSubcategories = async (categoryId: number) => {
-    if (!user) return;
+    if (!user || !categoryId) {
+      setSubcategories([]);
+      return;
+    }
 
     try {
+      setLoadingSubcategories(true);
+      setSubcategories([]); // Limpar lista anterior
+      
       const { data, error } = await supabase
         .from('subcategories')
         .select('id, name, category_id')
@@ -137,21 +155,34 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
         .order('name');
 
       if (error) throw error;
+      
+      // Sempre usar array vazio como fallback
       setSubcategories(data || []);
     } catch (error) {
       console.error('Error loading subcategories:', error);
+      setSubcategories([]); // Estado seguro em caso de erro
       toast({
         title: "Erro",
         description: "Não foi possível carregar as subcategorias.",
         variant: "destructive"
       });
+    } finally {
+      setLoadingSubcategories(false);
     }
   };
 
+  // Tratar mudança de categoria com limpeza segura
   const handleCategoryChange = (categoryId: string) => {
+    if (!categoryId) {
+      setSelectedCategoryId(null);
+      setSelectedSubcategoryId(null);
+      setSubcategories([]);
+      return;
+    }
+
     const id = parseInt(categoryId);
     setSelectedCategoryId(id);
-    setSelectedSubcategoryId(null); // Reset subcategory when category changes
+    setSelectedSubcategoryId(null); // Resetar subcategoria ao mudar categoria
     loadSubcategories(id);
     clearErrors();
   };
@@ -276,25 +307,35 @@ export const PlanejamentoModal: React.FC<PlanejamentoModalProps> = ({
             )}
           </div>
 
-          {selectedCategoryId && subcategories.length > 0 && (
+          {selectedCategoryId && (
             <div className="space-y-2">
               <Label htmlFor="subcategory_id">Subcategoria</Label>
               <Select 
                 value={selectedSubcategoryId?.toString() || ''} 
                 onValueChange={handleSubcategoryChange}
+                disabled={loadingSubcategories}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma subcategoria (opcional)" />
+                  <SelectValue 
+                    placeholder={
+                      loadingSubcategories 
+                        ? "Carregando subcategorias..." 
+                        : "Selecione uma subcategoria (opcional)"
+                    } 
+                  />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="">Nenhuma subcategoria</SelectItem>
-                  {subcategories.map((subcategory) => (
+                  {Array.isArray(subcategories) && subcategories.map((subcategory) => (
                     <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
                       {subcategory.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              {loadingSubcategories && (
+                <p className="text-sm text-muted-foreground">Carregando subcategorias...</p>
+              )}
             </div>
           )}
 

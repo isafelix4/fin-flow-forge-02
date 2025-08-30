@@ -277,12 +277,18 @@ const Planejamento = () => {
     setIsModalOpen(true);
   };
 
-  const handleDeletePlanejamento = async (id: number) => {
+  const handleDeletePlanejamento = async (id: number, itemName: string) => {
+    // Implementar confirmação antes da exclusão
+    if (!confirm(`Tem certeza de que deseja excluir o planejamento "${itemName}"?`)) {
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('budgets')
         .delete()
-        .eq('id', id);
+        .eq('id', id)
+        .eq('user_id', user?.id); // Segurança adicional
 
       if (error) throw error;
 
@@ -454,7 +460,10 @@ const Planejamento = () => {
                             key={item.id}
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeletePlanejamento(item.id)}
+                            onClick={() => handleDeletePlanejamento(
+                              item.id, 
+                              `${item.category_name}${item.subcategory_name ? ` - ${item.subcategory_name}` : ''}`
+                            )}
                             title={`Excluir: ${item.subcategory_name || 'Categoria geral'}`}
                           >
                             <Trash2 className="h-4 w-4" />
@@ -528,17 +537,20 @@ const Planejamento = () => {
                           >
                             <Edit className="h-4 w-4" />
                           </Button>
-                          {category.items.map(item => (
-                            <Button
-                              key={item.id}
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeletePlanejamento(item.id)}
-                              title={`Excluir: ${item.subcategory_name || 'Categoria geral'}`}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          ))}
+                        {category.items.map(item => (
+                          <Button
+                            key={item.id}
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeletePlanejamento(
+                              item.id, 
+                              `${item.category_name}${item.subcategory_name ? ` - ${item.subcategory_name}` : ''}`
+                            )}
+                            title={`Excluir: ${item.subcategory_name || 'Categoria geral'}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        ))}
                         </div>
                       </div>
                       
