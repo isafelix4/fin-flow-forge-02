@@ -139,40 +139,75 @@ export default function ImportarTransacoes() {
     const lines = csvText.split('\n').filter(line => line.trim());
     const transactions: ParsedTransaction[] = [];
 
+    // Auto-detect delimiter by analyzing the first few lines
+    const detectDelimiter = (sampleLines: string[]): string => {
+      const delimiters = [';', ',', '\t'];
+      const scores: Record<string, number> = { ';': 0, ',': 0, '\t': 0 };
+      
+      for (const line of sampleLines.slice(0, Math.min(3, sampleLines.length))) {
+        for (const delimiter of delimiters) {
+          const parts = line.split(delimiter);
+          if (parts.length === 3) {
+            scores[delimiter] += 10; // Strong preference for 3 columns
+          } else if (parts.length > 1) {
+            scores[delimiter] += parts.length;
+          }
+        }
+      }
+      
+      // Return delimiter with highest score, defaulting to semicolon for Brazilian CSVs
+      const bestDelimiter = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
+      return bestDelimiter;
+    };
+
+    const delimiter = detectDelimiter(lines);
+    console.log(`Detected CSV delimiter: "${delimiter}"`);
+
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
 
-      let columns: string[] = [];
-      
-      // Try different delimiters
-      const delimiters = [',', ';', '\t'];
-      let bestDelimiter = ',';
-      let maxColumns = 0;
-      
-      for (const delimiter of delimiters) {
-        const testColumns = line.split(delimiter);
-        if (testColumns.length > maxColumns) {
-          maxColumns = testColumns.length;
-          bestDelimiter = delimiter;
+      // Parse CSV considering quoted fields
+      const parseCSVLine = (line: string, delimiter: string): string[] => {
+        const result: string[] = [];
+        let current = '';
+        let inQuotes = false;
+        let quoteChar = '';
+        
+        for (let j = 0; j < line.length; j++) {
+          const char = line[j];
+          
+          if (!inQuotes && (char === '"' || char === "'")) {
+            inQuotes = true;
+            quoteChar = char;
+          } else if (inQuotes && char === quoteChar) {
+            // Check if it's an escaped quote (doubled)
+            if (line[j + 1] === quoteChar) {
+              current += char;
+              j++; // Skip next quote
+            } else {
+              inQuotes = false;
+              quoteChar = '';
+            }
+          } else if (!inQuotes && char === delimiter) {
+            result.push(current.trim());
+            current = '';
+          } else {
+            current += char;
+          }
         }
-      }
-      
-      // Parse with the best delimiter found
-      const rawColumns = line.split(bestDelimiter);
-      
-      // Clean and process columns
-      for (let col of rawColumns) {
-        col = col.trim();
-        // Remove surrounding quotes if present
-        if ((col.startsWith('"') && col.endsWith('"')) || (col.startsWith("'") && col.endsWith("'"))) {
-          col = col.slice(1, -1);
-        }
-        columns.push(col);
-      }
+        
+        result.push(current.trim());
+        return result;
+      };
+
+      const columns = parseCSVLine(line, delimiter);
       
       if (columns.length !== 3) {
-        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas, encontradas ${columns.length}. Verifique se o arquivo está no formato correto: Data,Descrição,Valor`);
+        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas (Data${delimiter}Descrição${delimiter}Valor), encontradas ${columns.length}. 
+Linha atual: "${line}"
+Colunas encontradas: ${JSON.stringify(columns)}
+Verifique o formato do arquivo.`);
       }
 
       const [dateStr, description, amountStr] = columns;
@@ -190,25 +225,55 @@ export default function ImportarTransacoes() {
         throw new Error(`Erro na linha ${i + 1}: data inválida`);
       }
 
-      // Parse amount - handle Brazilian decimal format
-      let normalizedAmount = amountStr;
+      // Parse amount - handle Brazilian decimal format more robustly
+      let normalizedAmount = amountStr.trim();
       
-      // Remove currency symbols and spaces
-      normalizedAmount = normalizedAmount.replace(/[R$\s]/g, '');
+      // Remove currency symbols and extra spaces
+      normalizedAmount = normalizedAmount.replace(/[R$\s]+/g, '');
       
-      // Handle Brazilian number format: replace comma with dot for decimal
-      // But only if there's exactly one comma and it's followed by 1-2 digits
-      const commaMatch = normalizedAmount.match(/,(\d{1,2})$/);
-      if (commaMatch) {
+      // Handle various Brazilian number formats
+      // Examples: "1.234,56", "1234,56", "1.234.567,89", "-1.234,56"
+      
+      // Count dots and commas to determine format
+      const dotCount = (normalizedAmount.match(/\./g) || []).length;
+      const commaCount = (normalizedAmount.match(/,/g) || []).length;
+      
+      if (commaCount === 1 && dotCount >= 1) {
+        // Format like "1.234,56" or "12.345.678,90" - dots are thousands, comma is decimal
+        const lastCommaIndex = normalizedAmount.lastIndexOf(',');
+        const beforeComma = normalizedAmount.substring(0, lastCommaIndex);
+        const afterComma = normalizedAmount.substring(lastCommaIndex + 1);
+        
+        // Remove dots (thousands separators) and replace comma with dot
+        normalizedAmount = beforeComma.replace(/\./g, '') + '.' + afterComma;
+      } else if (commaCount === 1 && dotCount === 0) {
+        // Format like "1234,56" - comma is decimal separator
         normalizedAmount = normalizedAmount.replace(',', '.');
+      } else if (commaCount === 0 && dotCount === 1) {
+        // Format like "1234.56" - already in correct format
+        // Do nothing
+      } else if (commaCount === 0 && dotCount > 1) {
+        // Format like "1.234.567" - dots are thousands separators, no decimals
+        normalizedAmount = normalizedAmount.replace(/\./g, '');
+      } else if (commaCount === 0 && dotCount === 0) {
+        // Format like "1234" - integer value
+        // Do nothing
+      } else {
+        // Ambiguous format - try to handle gracefully
+        // Remove all dots and replace last comma with dot
+        if (commaCount > 0) {
+          const parts = normalizedAmount.split(',');
+          const beforeLastComma = parts.slice(0, -1).join('').replace(/\./g, '');
+          const afterLastComma = parts[parts.length - 1];
+          normalizedAmount = beforeLastComma + '.' + afterLastComma;
+        } else {
+          normalizedAmount = normalizedAmount.replace(/\./g, '');
+        }
       }
-      
-      // Remove any remaining commas (thousands separators)
-      normalizedAmount = normalizedAmount.replace(/,/g, '');
       
       const amount = parseFloat(normalizedAmount);
       if (isNaN(amount)) {
-        throw new Error(`Erro na linha ${i + 1}: valor inválido "${amountStr}"`);
+        throw new Error(`Erro na linha ${i + 1}: valor inválido "${amountStr}". Formatos suportados: 1.234,56 ou 1234,56 ou 1234.56`);
       }
 
       transactions.push({
@@ -501,13 +566,15 @@ export default function ImportarTransacoes() {
           <h1 className="text-3xl font-bold mb-6">Importar Extrato</h1>
           
           {/* Instructions */}
-          <Alert className="mb-6">
+           <Alert className="mb-6">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              <strong>Instruções:</strong> Seu arquivo CSV precisa ter 3 colunas, nesta ordem: 
-              <br />1. <strong>Data</strong> (formato DD/MM/YYYY)
-              <br />2. <strong>Descrição</strong> (texto)
-              <br />3. <strong>Valor</strong> (número - use vírgula como separador decimal. Valores negativos para despesas como -50,25 e positivos para receitas como 1200,00)
+              <strong>Instruções para o arquivo CSV:</strong>
+              <br />• <strong>3 colunas obrigatórias:</strong> Data, Descrição, Valor
+              <br />• <strong>Separadores aceitos:</strong> vírgula (,), ponto e vírgula (;) ou tab
+              <br />• <strong>Data:</strong> formato DD/MM/YYYY (ex: 15/03/2024)
+              <br />• <strong>Valor:</strong> formato brasileiro com vírgula decimal (ex: 1.234,56 ou -50,25)
+              <br />• <strong>Exemplo de linha:</strong> 15/03/2024,Compra supermercado,125,50
             </AlertDescription>
           </Alert>
 
