@@ -5,8 +5,7 @@ import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 import { FloatingTransactionButton } from '@/components/FloatingTransactionButton';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+// Chart imports removed - now using GraficoDespesasInterativo component
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format, startOfMonth } from 'date-fns';
@@ -14,7 +13,7 @@ import { ptBR } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
 import { Upload, TrendingUp, Filter } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import GraficoDespesasInterativo from '@/components/GraficoDespesasInterativo';
 
 interface DashboardData {
   income: number;
@@ -23,16 +22,6 @@ interface DashboardData {
   netWorth: number;
   debtPayments: number;
   investmentContributions: number;
-  categoryExpenses: Array<{
-    name: string;
-    amount: number;
-    percentage: number;
-  }>;
-  subcategoryExpenses: Array<{
-    name: string;
-    amount: number;
-    category: string;
-  }>;
 }
 
 const Index = () => {
@@ -46,11 +35,8 @@ const Index = () => {
     netWorth: 0,
     debtPayments: 0,
     investmentContributions: 0,
-    categoryExpenses: [],
-    subcategoryExpenses: []
   });
   const [loading, setLoading] = useState(true);
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
 
   const loadDashboardData = async () => {
     if (!user) return;
@@ -67,9 +53,6 @@ const Index = () => {
           categories (
             name,
             type
-          ),
-          subcategories (
-            name
           )
         `)
         .eq('user_id', user.id)
@@ -104,46 +87,6 @@ const Index = () => {
         ?.filter(t => t.type === 'Expense' && t.categories?.type === 'Investment')
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
-      // Calculate expenses by category
-      const categoryMap = new Map<string, number>();
-      transactions
-        ?.filter(t => t.type === 'Expense' && t.categories?.name)
-        .forEach(t => {
-          const categoryName = t.categories!.name;
-          const currentAmount = categoryMap.get(categoryName) || 0;
-          categoryMap.set(categoryName, currentAmount + Number(t.amount));
-        });
-
-      const categoryExpenses = Array.from(categoryMap.entries())
-        .map(([name, amount]) => ({
-          name,
-          amount,
-          percentage: expenses > 0 ? (amount / expenses) * 100 : 0
-        }))
-        .sort((a, b) => b.amount - a.amount);
-
-      // Calculate expenses by subcategory - properly grouped
-      const subcategoryMap = new Map<string, { amount: number, category: string }>();
-      transactions
-        ?.filter(t => t.type === 'Expense' && t.subcategories?.name)
-        .forEach(t => {
-          const subcategoryName = t.subcategories!.name;
-          const categoryName = t.categories?.name || 'Sem categoria';
-          const currentData = subcategoryMap.get(subcategoryName) || { amount: 0, category: categoryName };
-          subcategoryMap.set(subcategoryName, {
-            amount: currentData.amount + Number(t.amount),
-            category: categoryName
-          });
-        });
-
-      const subcategoryExpenses = Array.from(subcategoryMap.entries())
-        .map(([name, data]) => ({
-          name,
-          amount: data.amount,
-          category: data.category
-        }))
-        .sort((a, b) => b.amount - a.amount);
-
       // Get net worth (investments - debts)
       const [investmentsResponse, debtsResponse] = await Promise.all([
         supabase
@@ -167,8 +110,6 @@ const Index = () => {
         netWorth,
         debtPayments,
         investmentContributions,
-        categoryExpenses,
-        subcategoryExpenses
       });
 
     } catch (error) {
@@ -193,19 +134,6 @@ const Index = () => {
       currency: 'BRL'
     }).format(value);
   };
-
-  const chartConfig = {
-    amount: {
-      label: "Valor",
-      color: "hsl(var(--chart-1))",
-    },
-  };
-
-  const filteredSubcategoryExpenses = selectedCategory === 'all' 
-    ? dashboardData.subcategoryExpenses
-    : dashboardData.subcategoryExpenses.filter(sub => sub.category === selectedCategory);
-
-  const availableCategories = Array.from(new Set(dashboardData.subcategoryExpenses.map(sub => sub.category)));
 
   return (
     <div className="min-h-screen bg-background">
@@ -333,118 +261,7 @@ const Index = () => {
         </div>
 
         {/* Charts Section */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Expenses Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Despesas por Categoria</CardTitle>
-            </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="h-80 flex items-center justify-center">
-                <p className="text-muted-foreground">Carregando...</p>
-              </div>
-            ) : dashboardData.categoryExpenses.length === 0 ? (
-              <div className="h-80 flex items-center justify-center">
-                <p className="text-muted-foreground">
-                  Nenhuma despesa encontrada para o período selecionado
-                </p>
-              </div>
-            ) : (
-              <ChartContainer config={chartConfig} className="h-80">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dashboardData.categoryExpenses}>
-                    <XAxis 
-                      dataKey="name" 
-                      tick={{ fontSize: 12 }}
-                      angle={-45}
-                      textAnchor="end"
-                      height={100}
-                    />
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => formatCurrency(value)}
-                    />
-                    <ChartTooltip 
-                      content={<ChartTooltipContent />}
-                      formatter={(value: any) => [formatCurrency(value), 'Valor']}
-                      labelFormatter={(label) => `Categoria: ${label}`}
-                    />
-                    <Bar 
-                      dataKey="amount" 
-                      fill="var(--color-amount)"
-                      radius={[4, 4, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            )}
-            </CardContent>
-          </Card>
-
-          {/* Subcategory Expenses Chart */}
-          <Card>
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Despesas por Subcategoria</CardTitle>
-                <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">Todas</SelectItem>
-                    {availableCategories.map((category) => (
-                      <SelectItem key={category} value={category}>
-                        {category}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="h-80 flex items-center justify-center">
-                  <p className="text-muted-foreground">Carregando...</p>
-                </div>
-              ) : filteredSubcategoryExpenses.length === 0 ? (
-                <div className="h-80 flex items-center justify-center">
-                  <p className="text-muted-foreground">
-                    Nenhuma subcategoria encontrada para o filtro selecionado
-                  </p>
-                </div>
-              ) : (
-                <ChartContainer config={chartConfig} className="h-80">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={filteredSubcategoryExpenses}>
-                      <XAxis 
-                        dataKey="name" 
-                        tick={{ fontSize: 12 }}
-                        angle={-45}
-                        textAnchor="end"
-                        height={100}
-                      />
-                      <YAxis 
-                        tick={{ fontSize: 12 }}
-                        tickFormatter={(value) => formatCurrency(value)}
-                      />
-                      <ChartTooltip 
-                        content={<ChartTooltipContent />}
-                        formatter={(value: any) => [formatCurrency(value), 'Valor']}
-                        labelFormatter={(label) => `Subcategoria: ${label}`}
-                      />
-                      <Bar 
-                        dataKey="amount" 
-                        fill="var(--color-amount)"
-                        radius={[4, 4, 0, 0]}
-                      />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </ChartContainer>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+        <GraficoDespesasInterativo loading={loading} />
       </main>
     </div>
   );
