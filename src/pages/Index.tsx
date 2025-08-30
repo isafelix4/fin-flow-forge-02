@@ -21,6 +21,8 @@ interface DashboardData {
   expenses: number;
   balance: number;
   netWorth: number;
+  debtPayments: number;
+  investmentContributions: number;
   categoryExpenses: Array<{
     name: string;
     amount: number;
@@ -42,6 +44,8 @@ const Index = () => {
     expenses: 0,
     balance: 0,
     netWorth: 0,
+    debtPayments: 0,
+    investmentContributions: 0,
     categoryExpenses: [],
     subcategoryExpenses: []
   });
@@ -54,14 +58,15 @@ const Index = () => {
     try {
       setLoading(true);
       
-      // Get transactions for the selected month
+      // Get transactions for the selected month with category type information
       const { data: transactions, error: transactionsError } = await supabase
         .from('transactions')
         .select(`
           amount,
           type,
           categories (
-            name
+            name,
+            type
           ),
           subcategories (
             name
@@ -87,6 +92,16 @@ const Index = () => {
 
       const expenses = transactions
         ?.filter(t => t.type === 'Expense')
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+
+      // Calculate debt payments for the month
+      const debtPayments = transactions
+        ?.filter(t => t.type === 'Expense' && t.categories?.type === 'Debt')
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+
+      // Calculate investment contributions for the month
+      const investmentContributions = transactions
+        ?.filter(t => t.type === 'Expense' && t.categories?.type === 'Investment')
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
       // Calculate expenses by category
@@ -150,6 +165,8 @@ const Index = () => {
         expenses,
         balance: income - expenses,
         netWorth,
+        debtPayments,
+        investmentContributions,
         categoryExpenses,
         subcategoryExpenses
       });
@@ -226,8 +243,9 @@ const Index = () => {
           />
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        {/* Summary Cards - 2x3 Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Row 1: Receitas, Despesas, Saldo */}
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -265,6 +283,35 @@ const Index = () => {
                 dashboardData.balance >= 0 ? 'text-green-600' : 'text-red-600'
               }`}>
                 {loading ? '...' : formatCurrency(dashboardData.balance)}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Row 2: Pagamento de Dívidas, Aportes em Investimentos, Patrimônio Líquido */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Pagamento de Dívidas
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Total pago no mês</p>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-blue-600">
+                {loading ? '...' : formatCurrency(dashboardData.debtPayments)}
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Aportes em Investimentos
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">Total investido no mês</p>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-purple-600">
+                {loading ? '...' : formatCurrency(dashboardData.investmentContributions)}
               </div>
             </CardContent>
           </Card>
