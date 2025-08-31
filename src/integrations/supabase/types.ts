@@ -86,6 +86,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "budgets_subcategory_id_fkey"
+            columns: ["subcategory_id"]
+            isOneToOne: false
+            referencedRelation: "subcategories"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "budgets_user_id_fkey"
             columns: ["user_id"]
             isOneToOne: false

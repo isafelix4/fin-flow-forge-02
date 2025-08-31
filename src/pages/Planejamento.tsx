@@ -7,10 +7,13 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
+import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { Plus, Trash2 } from 'lucide-react';
+import { AddBudgetModal } from '@/components/AddBudgetModal';
 
 interface Category {
   id: number;
@@ -30,6 +33,8 @@ interface Budget {
   subcategory_id: number | null;
   planned_amount: number;
   plan_type: 'RECEITA' | 'DESPESA';
+  category_name?: string;
+  subcategory_name?: string;
 }
 
 interface TransactionSummary {
@@ -39,11 +44,11 @@ interface TransactionSummary {
   transaction_type: 'Income' | 'Expense';
 }
 
-interface PlanningData {
+interface BudgetItem {
   category_id: number;
   subcategory_id: number | null;
-  planned_amount: number;
-  realized_amount: number;
+  category_name: string;
+  subcategory_name?: string;
 }
 
 const Planejamento = () => {
@@ -56,6 +61,8 @@ const Planejamento = () => {
   const [transactionSummaries, setTransactionSummaries] = useState<TransactionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingTimeouts, setSavingTimeouts] = useState<{ [key: string]: NodeJS.Timeout }>({});
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [modalPlanType, setModalPlanType] = useState<'RECEITA' | 'DESPESA'>('RECEITA');
 
   // Summary calculations
   const receitasPlanejadas = budgets
@@ -100,10 +107,18 @@ const Planejamento = () => {
 
       if (categoriesError) throw categoriesError;
 
-      // Load budgets for the reference month
+      // Load budgets for the reference month with category names
       const { data: budgetsData, error: budgetsError } = await supabase
         .from('budgets')
-        .select('*')
+        .select(`
+          *,
+          categories!inner (
+            name
+          ),
+          subcategories (
+            name
+          )
+        `)
         .eq('user_id', user.id)
         .eq('reference_month', referenceMonth);
 
@@ -142,7 +157,9 @@ const Planejamento = () => {
       setCategories(categoriesData || []);
       setBudgets((budgetsData || []).map(budget => ({
         ...budget,
-        plan_type: budget.plan_type as 'RECEITA' | 'DESPESA'
+        plan_type: budget.plan_type as 'RECEITA' | 'DESPESA',
+        category_name: (budget as any).categories?.name,
+        subcategory_name: (budget as any).subcategories?.name
       })));
       setTransactionSummaries(summaries);
     } catch (error) {
@@ -161,73 +178,107 @@ const Planejamento = () => {
     loadData();
   }, [loadData]);
 
-  const saveBudget = useCallback(async (
-    planType: 'RECEITA' | 'DESPESA',
-    plannedAmount: number,
-    categoryId: number,
-    subcategoryId: number | null = null
-  ) => {
+  const addBudgetItem = useCallback(async (item: BudgetItem) => {
     if (!user) return;
 
     try {
       const budgetData = {
         user_id: user.id,
         reference_month: referenceMonth,
-        category_id: categoryId,
-        subcategory_id: subcategoryId,
-        planned_amount: plannedAmount,
-        plan_type: planType
+        category_id: item.category_id,
+        subcategory_id: item.subcategory_id,
+        planned_amount: 0,
+        plan_type: modalPlanType
       };
 
       const { data, error } = await supabase
         .from('budgets')
-        .upsert(budgetData, {
-          onConflict: 'user_id,reference_month,category_id,subcategory_id,plan_type'
-        })
-        .select();
+        .insert(budgetData)
+        .select()
+        .single();
 
       if (error) throw error;
 
       // Update local state
-      setBudgets(prev => {
-        const existingIndex = prev.findIndex(b => 
-          b.category_id === categoryId && 
-          b.subcategory_id === subcategoryId &&
-          b.plan_type === planType
-        );
+      setBudgets(prev => [...prev, {
+        ...budgetData,
+        id: data.id,
+        category_name: item.category_name,
+        subcategory_name: item.subcategory_name
+      }]);
 
-        if (existingIndex >= 0) {
-          const updated = [...prev];
-          updated[existingIndex] = { ...updated[existingIndex], planned_amount: plannedAmount };
-          return updated;
-        } else {
-          return [...prev, { ...budgetData, id: data[0].id }];
-        }
+      toast({
+        title: "Sucesso",
+        description: "Item adicionado ao planejamento.",
       });
     } catch (error) {
-      console.error('Erro ao salvar orçamento:', error);
+      console.error('Erro ao adicionar item:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível adicionar o item ao planejamento.",
+        variant: "destructive",
+      });
+    }
+  }, [user, referenceMonth, modalPlanType, toast]);
+
+  const removeBudgetItem = useCallback(async (budgetId: number) => {
+    try {
+      const { error } = await supabase
+        .from('budgets')
+        .delete()
+        .eq('id', budgetId);
+
+      if (error) throw error;
+
+      // Update local state
+      setBudgets(prev => prev.filter(b => b.id !== budgetId));
+
+      toast({
+        title: "Sucesso",
+        description: "Item removido do planejamento.",
+      });
+    } catch (error) {
+      console.error('Erro ao remover item:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível remover o item.",
+        variant: "destructive",
+      });
+    }
+  }, [toast]);
+
+  const updatePlannedAmount = useCallback(async (budgetId: number, newAmount: number) => {
+    try {
+      const { error } = await supabase
+        .from('budgets')
+        .update({ planned_amount: newAmount })
+        .eq('id', budgetId);
+
+      if (error) throw error;
+
+      // Update local state
+      setBudgets(prev => prev.map(b => 
+        b.id === budgetId ? { ...b, planned_amount: newAmount } : b
+      ));
+    } catch (error) {
+      console.error('Erro ao atualizar valor planejado:', error);
       toast({
         title: "Erro",
         description: "Não foi possível salvar o planejamento.",
         variant: "destructive",
       });
     }
-  }, [user, referenceMonth, toast]);
+  }, [toast]);
 
-  const debouncedSave = useCallback((
-    planType: 'RECEITA' | 'DESPESA',
-    value: number,
-    categoryId: number,
-    subcategoryId: number | null = null
-  ) => {
-    const key = `${planType}-${categoryId}-${subcategoryId}`;
+  const debouncedSave = useCallback((budgetId: number, value: number) => {
+    const key = `budget-${budgetId}`;
     
     if (savingTimeouts[key]) {
       clearTimeout(savingTimeouts[key]);
     }
 
     const timeout = setTimeout(() => {
-      saveBudget(planType, value, categoryId, subcategoryId);
+      updatePlannedAmount(budgetId, value);
       setSavingTimeouts(prev => {
         const updated = { ...prev };
         delete updated[key];
@@ -236,16 +287,7 @@ const Planejamento = () => {
     }, 500);
 
     setSavingTimeouts(prev => ({ ...prev, [key]: timeout }));
-  }, [saveBudget, savingTimeouts]);
-
-  const getBudgetValue = (planType: 'RECEITA' | 'DESPESA', categoryId: number, subcategoryId: number | null = null) => {
-    const budget = budgets.find(b => 
-      b.plan_type === planType && 
-      b.category_id === categoryId && 
-      b.subcategory_id === subcategoryId
-    );
-    return budget ? Number(budget.planned_amount) : 0;
-  };
+  }, [updatePlannedAmount, savingTimeouts]);
 
   const getRealizedValue = (transactionType: 'Income' | 'Expense', categoryId: number, subcategoryId: number | null = null) => {
     const summary = transactionSummaries.find(t => 
@@ -256,21 +298,6 @@ const Planejamento = () => {
     return summary ? Number(summary.total_amount) : 0;
   };
 
-  const getCategoryTotals = (category: Category, planType: 'RECEITA' | 'DESPESA') => {
-    const transactionType = planType === 'RECEITA' ? 'Income' : 'Expense';
-    
-    let plannedTotal = getBudgetValue(planType, category.id);
-    let realizedTotal = getRealizedValue(transactionType, category.id);
-
-    // Add subcategory totals
-    category.subcategories?.forEach(sub => {
-      plannedTotal += getBudgetValue(planType, category.id, sub.id);
-      realizedTotal += getRealizedValue(transactionType, category.id, sub.id);
-    });
-
-    return { plannedTotal, realizedTotal };
-  };
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -278,86 +305,126 @@ const Planejamento = () => {
     }).format(value);
   };
 
-  const getProgressColor = (percentage: number) => {
-    if (percentage <= 80) return 'bg-primary';
-    if (percentage <= 100) return 'bg-yellow-500';
-    return 'bg-destructive';
+  const groupBudgetsByCategory = (planType: 'RECEITA' | 'DESPESA') => {
+    const filtered = budgets.filter(b => b.plan_type === planType);
+    const grouped: { [categoryId: number]: Budget[] } = {};
+
+    filtered.forEach(budget => {
+      if (!grouped[budget.category_id]) {
+        grouped[budget.category_id] = [];
+      }
+      grouped[budget.category_id].push(budget);
+    });
+
+    return grouped;
   };
 
-  const renderPlanningTable = (category: Category, planType: 'RECEITA' | 'DESPESA') => {
+  const renderBudgetSection = (planType: 'RECEITA' | 'DESPESA') => {
     const transactionType = planType === 'RECEITA' ? 'Income' : 'Expense';
-    
-    return (
-      <div className="space-y-2">
-        {/* Main category row */}
-        <div className="grid grid-cols-5 gap-4 items-center p-2 border rounded">
-          <div className="font-medium">{category.name}</div>
-          <div>
-            <Input
-              type="number"
-              step="0.01"
-              min="0"
-              placeholder="0,00"
-              value={getBudgetValue(planType, category.id) || ''}
-              onChange={(e) => {
-                const value = parseFloat(e.target.value) || 0;
-                debouncedSave(planType, value, category.id);
-              }}
-              className="h-8"
-            />
-          </div>
-          <div className="text-sm text-muted-foreground">
-            {formatCurrency(getRealizedValue(transactionType, category.id))}
-          </div>
-          <div className="text-sm">
-            {formatCurrency(getBudgetValue(planType, category.id) - getRealizedValue(transactionType, category.id))}
-          </div>
-          <div className="w-full">
-            {getBudgetValue(planType, category.id) > 0 && (
-              <Progress
-                value={Math.min((getRealizedValue(transactionType, category.id) / getBudgetValue(planType, category.id)) * 100, 100)}
-                className="h-2"
-              />
-            )}
-          </div>
-        </div>
+    const grouped = groupBudgetsByCategory(planType);
+    const categoryIds = Object.keys(grouped).map(Number);
 
-        {/* Subcategory rows */}
-        {category.subcategories?.map(subcategory => (
-          <div key={subcategory.id} className="grid grid-cols-5 gap-4 items-center p-2 border rounded ml-4">
-            <div className="text-sm text-muted-foreground">→ {subcategory.name}</div>
-            <div>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="0,00"
-                value={getBudgetValue(planType, category.id, subcategory.id) || ''}
-                onChange={(e) => {
-                  const value = parseFloat(e.target.value) || 0;
-                  debouncedSave(planType, value, category.id, subcategory.id);
-                }}
-                className="h-8"
-              />
-            </div>
-            <div className="text-sm text-muted-foreground">
-              {formatCurrency(getRealizedValue(transactionType, category.id, subcategory.id))}
-            </div>
-            <div className="text-sm">
-              {formatCurrency(getBudgetValue(planType, category.id, subcategory.id) - getRealizedValue(transactionType, category.id, subcategory.id))}
-            </div>
-            <div className="w-full">
-              {getBudgetValue(planType, category.id, subcategory.id) > 0 && (
-                <Progress
-                  value={Math.min((getRealizedValue(transactionType, category.id, subcategory.id) / getBudgetValue(planType, category.id, subcategory.id)) * 100, 100)}
-                  className="h-2"
-                />
-              )}
-            </div>
-          </div>
-        ))}
-      </div>
+    if (categoryIds.length === 0) {
+      return (
+        <div className="text-center py-8 text-muted-foreground">
+          <p>Nenhum item adicionado ao planejamento.</p>
+          <p className="text-sm">Clique em "+ Adicionar Orçamento" para começar.</p>
+        </div>
+      );
+    }
+
+    return (
+      <Accordion type="multiple" className="space-y-2">
+        {categoryIds.map(categoryId => {
+          const categoryBudgets = grouped[categoryId];
+          const categoryName = categoryBudgets[0]?.category_name || 'Categoria Desconhecida';
+          
+          // Calculate totals for this category
+          const totalPlanned = categoryBudgets.reduce((sum, b) => sum + Number(b.planned_amount), 0);
+          const totalRealized = categoryBudgets.reduce((sum, b) => 
+            sum + getRealizedValue(transactionType, b.category_id, b.subcategory_id), 0
+          );
+
+          return (
+            <AccordionItem key={categoryId} value={`${planType.toLowerCase()}-${categoryId}`}>
+              <AccordionTrigger className="hover:no-underline">
+                <div className="flex justify-between items-center w-full mr-4">
+                  <span>{categoryName}</span>
+                  <div className="flex gap-4 text-sm">
+                    <span className={planType === 'RECEITA' ? 'text-green-600' : 'text-red-600'}>
+                      {formatCurrency(totalPlanned)}
+                    </span>
+                    <span className="text-muted-foreground">{formatCurrency(totalRealized)}</span>
+                  </div>
+                </div>
+              </AccordionTrigger>
+              <AccordionContent className="pt-4">
+                <div className="space-y-2">
+                  {categoryBudgets.map(budget => {
+                    const realizedValue = getRealizedValue(transactionType, budget.category_id, budget.subcategory_id);
+                    const remainingValue = Number(budget.planned_amount) - realizedValue;
+                    const progressPercentage = budget.planned_amount > 0 
+                      ? Math.min((realizedValue / Number(budget.planned_amount)) * 100, 100) 
+                      : 0;
+
+                    return (
+                      <div key={budget.id} className="grid grid-cols-6 gap-4 items-center p-2 border rounded">
+                        <div className="text-sm font-medium">
+                          {budget.subcategory_id ? `→ ${budget.subcategory_name}` : budget.category_name}
+                        </div>
+                        <div>
+                          <Input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            placeholder="0,00"
+                            value={budget.planned_amount || ''}
+                            onChange={(e) => {
+                              const value = parseFloat(e.target.value) || 0;
+                              debouncedSave(budget.id, value);
+                            }}
+                            className="h-8"
+                          />
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {formatCurrency(realizedValue)}
+                        </div>
+                        <div className="text-sm">
+                          {formatCurrency(remainingValue)}
+                        </div>
+                        <div className="w-full">
+                          {budget.planned_amount > 0 && (
+                            <Progress
+                              value={progressPercentage}
+                              className="h-2"
+                            />
+                          )}
+                        </div>
+                        <div className="flex justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeBudgetItem(budget.id)}
+                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </AccordionContent>
+            </AccordionItem>
+          );
+        })}
+      </Accordion>
     );
+  };
+
+  const handleAddBudget = (planType: 'RECEITA' | 'DESPESA') => {
+    setModalPlanType(planType);
+    setShowAddModal(true);
   };
 
   if (loading) {
@@ -404,7 +471,7 @@ const Planejamento = () => {
               <CardContent className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Planejado:</span>
-                  <span className="font-medium text-green-600">{formatCurrency(receitasPlanejadas)}</span>
+                  <span className="font-medium text-emerald-600">{formatCurrency(receitasPlanejadas)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Realizado:</span>
@@ -436,13 +503,13 @@ const Planejamento = () => {
               <CardContent className="space-y-2">
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Previsto:</span>
-                  <span className={`font-medium ${saldoPrevisto >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`font-medium ${saldoPrevisto >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(saldoPrevisto)}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-sm text-muted-foreground">Atual:</span>
-                  <span className={`font-medium ${saldoAtual >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                  <span className={`font-medium ${saldoAtual >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                     {formatCurrency(saldoAtual)}
                   </span>
                 </div>
@@ -455,83 +522,71 @@ const Planejamento = () => {
             {/* Receitas Planejadas */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl text-green-600">Receitas Planejadas</CardTitle>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-xl text-emerald-600">Receitas Planejadas</CardTitle>
+                  <Button
+                    onClick={() => handleAddBudget('RECEITA')}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar Orçamento
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 gap-4 mb-4 text-sm font-medium text-muted-foreground">
+                <div className="grid grid-cols-6 gap-4 mb-4 text-sm font-medium text-muted-foreground">
                   <div>Categoria</div>
                   <div>Planejado</div>
                   <div>Realizado</div>
                   <div>Restante</div>
                   <div>Progresso</div>
+                  <div></div>
                 </div>
                 
-                <Accordion type="multiple" className="space-y-2">
-                  {categories.map(category => {
-                    const { plannedTotal, realizedTotal } = getCategoryTotals(category, 'RECEITA');
-                    
-                    return (
-                      <AccordionItem key={category.id} value={`receita-${category.id}`}>
-                        <AccordionTrigger className="hover:no-underline">
-                          <div className="flex justify-between items-center w-full mr-4">
-                            <span>{category.name}</span>
-                            <div className="flex gap-4 text-sm">
-                              <span className="text-green-600">{formatCurrency(plannedTotal)}</span>
-                              <span className="text-muted-foreground">{formatCurrency(realizedTotal)}</span>
-                            </div>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="pt-4">
-                          {renderPlanningTable(category, 'RECEITA')}
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
+                {renderBudgetSection('RECEITA')}
               </CardContent>
             </Card>
 
             {/* Despesas Planejadas */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-xl text-red-600">Despesas Planejadas</CardTitle>
+                <div className="flex justify-between items-center">
+                  <CardTitle className="text-xl text-red-600">Despesas Planejadas</CardTitle>
+                  <Button
+                    onClick={() => handleAddBudget('DESPESA')}
+                    size="sm"
+                    className="gap-2"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar Orçamento
+                  </Button>
+                </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-5 gap-4 mb-4 text-sm font-medium text-muted-foreground">
+                <div className="grid grid-cols-6 gap-4 mb-4 text-sm font-medium text-muted-foreground">
                   <div>Categoria</div>
                   <div>Planejado</div>
                   <div>Gasto</div>
                   <div>Restante</div>
                   <div>Progresso</div>
+                  <div></div>
                 </div>
                 
-                <Accordion type="multiple" className="space-y-2">
-                  {categories.map(category => {
-                    const { plannedTotal, realizedTotal } = getCategoryTotals(category, 'DESPESA');
-                    
-                    return (
-                      <AccordionItem key={category.id} value={`despesa-${category.id}`}>
-                        <AccordionTrigger className="hover:no-underline">
-                          <div className="flex justify-between items-center w-full mr-4">
-                            <span>{category.name}</span>
-                            <div className="flex gap-4 text-sm">
-                              <span className="text-red-600">{formatCurrency(plannedTotal)}</span>
-                              <span className="text-muted-foreground">{formatCurrency(realizedTotal)}</span>
-                            </div>
-                          </div>
-                        </AccordionTrigger>
-                        <AccordionContent className="pt-4">
-                          {renderPlanningTable(category, 'DESPESA')}
-                        </AccordionContent>
-                      </AccordionItem>
-                    );
-                  })}
-                </Accordion>
+                {renderBudgetSection('DESPESA')}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
+
+      <AddBudgetModal
+        open={showAddModal}
+        onOpenChange={setShowAddModal}
+        planType={modalPlanType}
+        onAddItem={addBudgetItem}
+        existingBudgets={budgets}
+      />
     </div>
   );
 };
