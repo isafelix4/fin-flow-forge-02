@@ -19,6 +19,7 @@ export const Header = () => {
     { name: 'Contas', href: '/contas', icon: CreditCard },
     { name: 'Categorias', href: '/categorias', icon: FolderOpen },
     { name: 'Transações', href: '/transacoes', icon: ArrowLeftRight },
+    { name: 'Planejamento', href: '/planejamento', icon: Calendar },
     { name: 'Importar', href: '/importar', icon: Upload },
     { name: 'Investimentos', href: '/investimentos', icon: TrendingUp },
     { name: 'Dívidas', href: '/dividas', icon: Wallet },

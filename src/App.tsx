@@ -15,6 +15,7 @@ import Investimentos from "./pages/Investimentos";
 import Dividas from "./pages/Dividas";
 import Transacoes from "./pages/Transacoes";
 import ImportarTransacoes from "./pages/ImportarTransacoes";
+import Planejamento from "./pages/Planejamento";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -83,6 +84,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ImportarTransacoes />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/planejamento" 
+              element={
+                <ProtectedRoute>
+                  <Planejamento />
                 </ProtectedRoute>
               } 
             />
