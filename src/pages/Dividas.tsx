@@ -82,8 +82,23 @@ function Dividas() {
 
       // Handle special sorting for progress and taxa_juros_mensal
       if (sortBy === 'progress') {
-        query = query.order('original_amount', { ascending: sortOrder === 'asc' })
-                     .order('current_balance', { ascending: sortOrder === 'desc' });
+        // Sort by progress percentage (calculated as (original - current) / original)
+        const { data: unsortedData, error } = await supabase
+          .from('debts')
+          .select('*')
+          .eq('user_id', user?.id);
+
+        if (error) throw error;
+        
+        const sortedData = (unsortedData || []).sort((a, b) => {
+          const progressA = ((a.original_amount - a.current_balance) / a.original_amount) * 100;
+          const progressB = ((b.original_amount - b.current_balance) / b.original_amount) * 100;
+          return sortOrder === 'asc' ? progressA - progressB : progressB - progressA;
+        });
+        
+        setDebts(sortedData);
+        setLoading(false);
+        return;
       } else if (sortBy === 'taxa_juros_mensal') {
         // Sort with NULLS LAST for ascending or NULLS FIRST for descending
         query = query.order('taxa_juros_mensal', { ascending: sortOrder === 'asc', nullsFirst: sortOrder === 'desc' });

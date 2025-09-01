@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Button } from '@/components/ui/button';
@@ -13,7 +13,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Plus, Trash2 } from 'lucide-react';
-import { AddBudgetModal } from '@/components/AddBudgetModal';
+import { ImprovedAddBudgetModal } from '@/components/ImprovedAddBudgetModal';
 
 interface Category {
   id: number;
@@ -319,107 +319,79 @@ const Planejamento = () => {
     return grouped;
   };
 
-  const renderBudgetSection = (planType: 'RECEITA' | 'DESPESA') => {
+  const renderBudgetRows = (planType: 'RECEITA' | 'DESPESA') => {
     const transactionType = planType === 'RECEITA' ? 'Income' : 'Expense';
-    const grouped = groupBudgetsByCategory(planType);
-    const categoryIds = Object.keys(grouped).map(Number);
+    const filteredBudgets = budgets.filter(b => b.plan_type === planType);
 
-    if (categoryIds.length === 0) {
+    if (filteredBudgets.length === 0) {
       return (
-        <div className="text-center py-8 text-muted-foreground">
-          <p>Nenhum item adicionado ao planejamento.</p>
-          <p className="text-sm">Clique em "+ Adicionar Orçamento" para começar.</p>
-        </div>
+        <TableRow>
+          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+            <p>Nenhum item adicionado ao planejamento.</p>
+            <p className="text-sm">Clique em "+ Adicionar Orçamento" para começar.</p>
+          </TableCell>
+        </TableRow>
       );
     }
 
-    return (
-      <Accordion type="multiple" className="space-y-2">
-        {categoryIds.map(categoryId => {
-          const categoryBudgets = grouped[categoryId];
-          const categoryName = categoryBudgets[0]?.category_name || 'Categoria Desconhecida';
-          
-          // Calculate totals for this category
-          const totalPlanned = categoryBudgets.reduce((sum, b) => sum + Number(b.planned_amount), 0);
-          const totalRealized = categoryBudgets.reduce((sum, b) => 
-            sum + getRealizedValue(transactionType, b.category_id, b.subcategory_id), 0
-          );
+    return filteredBudgets.map(budget => {
+      const realizedValue = getRealizedValue(transactionType, budget.category_id, budget.subcategory_id);
+      const remainingValue = Number(budget.planned_amount) - realizedValue;
+      const progressPercentage = budget.planned_amount > 0 
+        ? Math.min((realizedValue / Number(budget.planned_amount)) * 100, 100) 
+        : 0;
 
-          return (
-            <AccordionItem key={categoryId} value={`${planType.toLowerCase()}-${categoryId}`}>
-              <AccordionTrigger className="hover:no-underline">
-                <div className="flex justify-between items-center w-full mr-4">
-                  <span>{categoryName}</span>
-                  <div className="flex gap-4 text-sm">
-                    <span className={planType === 'RECEITA' ? 'text-green-600' : 'text-red-600'}>
-                      {formatCurrency(totalPlanned)}
-                    </span>
-                    <span className="text-muted-foreground">{formatCurrency(totalRealized)}</span>
-                  </div>
-                </div>
-              </AccordionTrigger>
-              <AccordionContent className="pt-4">
-                <div className="space-y-2">
-                  {categoryBudgets.map(budget => {
-                    const realizedValue = getRealizedValue(transactionType, budget.category_id, budget.subcategory_id);
-                    const remainingValue = Number(budget.planned_amount) - realizedValue;
-                    const progressPercentage = budget.planned_amount > 0 
-                      ? Math.min((realizedValue / Number(budget.planned_amount)) * 100, 100) 
-                      : 0;
-
-                    return (
-                      <div key={budget.id} className="grid grid-cols-6 gap-4 items-center p-2 border rounded">
-                        <div className="text-sm font-medium">
-                          {budget.subcategory_id ? `→ ${budget.subcategory_name}` : budget.category_name}
-                        </div>
-                        <div>
-                          <Input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            placeholder="0,00"
-                            value={budget.planned_amount || ''}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value) || 0;
-                              debouncedSave(budget.id, value);
-                            }}
-                            className="h-8"
-                          />
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          {formatCurrency(realizedValue)}
-                        </div>
-                        <div className="text-sm">
-                          {formatCurrency(remainingValue)}
-                        </div>
-                        <div className="w-full">
-                          {budget.planned_amount > 0 && (
-                            <Progress
-                              value={progressPercentage}
-                              className="h-2"
-                            />
-                          )}
-                        </div>
-                        <div className="flex justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeBudgetItem(budget.id)}
-                            className="h-8 w-8 p-0 text-destructive hover:text-destructive"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </AccordionContent>
-            </AccordionItem>
-          );
-        })}
-      </Accordion>
-    );
+      return (
+        <TableRow key={budget.id}>
+          <TableCell className="font-medium">
+            {budget.category_name || 'Categoria Desconhecida'}
+          </TableCell>
+          <TableCell>
+            {budget.subcategory_name || '-'}
+          </TableCell>
+          <TableCell>
+            <Input
+              type="number"
+              step="0.01"
+              min="0"
+              placeholder="0,00"
+              value={budget.planned_amount || ''}
+              onChange={(e) => {
+                const value = parseFloat(e.target.value) || 0;
+                debouncedSave(budget.id, value);
+              }}
+              className="h-8 w-24"
+            />
+          </TableCell>
+          <TableCell className="text-muted-foreground">
+            {formatCurrency(realizedValue)}
+          </TableCell>
+          <TableCell className={remainingValue >= 0 ? 'text-muted-foreground' : 'text-red-600'}>
+            {formatCurrency(remainingValue)}
+          </TableCell>
+          <TableCell>
+            <div className="w-full max-w-[100px]">
+              {budget.planned_amount > 0 && (
+                <Progress
+                  value={progressPercentage}
+                  className="h-2"
+                />
+              )}
+            </div>
+          </TableCell>
+          <TableCell>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => removeBudgetItem(budget.id)}
+              className="h-8 w-8 p-0 text-destructive hover:text-destructive"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          </TableCell>
+        </TableRow>
+      );
+    });
   };
 
   const handleAddBudget = (planType: 'RECEITA' | 'DESPESA') => {
@@ -452,7 +424,7 @@ const Planejamento = () => {
               <h1 className="text-3xl font-bold text-foreground">Planejamento Mensal</h1>
               <p className="text-muted-foreground mt-1">
                 Gerencie suas receitas e despesas planejadas para{' '}
-                {format(new Date(referenceMonth), 'MMMM yyyy', { locale: ptBR })}
+                {format(new Date(referenceMonth + 'T12:00:00'), 'MMMM yyyy', { locale: ptBR })}
               </p>
             </div>
             <MonthYearPicker
@@ -535,16 +507,24 @@ const Planejamento = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-6 gap-4 mb-4 text-sm font-medium text-muted-foreground">
-                  <div>Categoria</div>
-                  <div>Planejado</div>
-                  <div>Realizado</div>
-                  <div>Restante</div>
-                  <div>Progresso</div>
-                  <div></div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Subcategoria</TableHead>
+                        <TableHead>Planejado</TableHead>
+                        <TableHead>Realizado</TableHead>
+                        <TableHead>Restante</TableHead>
+                        <TableHead>Progresso</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {renderBudgetRows('RECEITA')}
+                    </TableBody>
+                  </Table>
                 </div>
-                
-                {renderBudgetSection('RECEITA')}
               </CardContent>
             </Card>
 
@@ -564,23 +544,31 @@ const Planejamento = () => {
                 </div>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-6 gap-4 mb-4 text-sm font-medium text-muted-foreground">
-                  <div>Categoria</div>
-                  <div>Planejado</div>
-                  <div>Gasto</div>
-                  <div>Restante</div>
-                  <div>Progresso</div>
-                  <div></div>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead>Subcategoria</TableHead>
+                        <TableHead>Planejado</TableHead>
+                        <TableHead>Gasto</TableHead>
+                        <TableHead>Restante</TableHead>
+                        <TableHead>Progresso</TableHead>
+                        <TableHead></TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {renderBudgetRows('DESPESA')}
+                    </TableBody>
+                  </Table>
                 </div>
-                
-                {renderBudgetSection('DESPESA')}
               </CardContent>
             </Card>
           </div>
         </div>
       </div>
 
-      <AddBudgetModal
+      <ImprovedAddBudgetModal
         open={showAddModal}
         onOpenChange={setShowAddModal}
         planType={modalPlanType}

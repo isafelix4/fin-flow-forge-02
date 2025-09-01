@@ -675,154 +675,155 @@ Verifique o formato do arquivo.`);
                     Configure a categoria para cada uma individualmente:
                   </p>
                   
-                  <div className="overflow-x-auto">
-                     <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Data</TableHead>
-                          <TableHead>Descrição</TableHead>
-                          <TableHead>Valor</TableHead>
-                          <TableHead>Tipo</TableHead>
-                          <TableHead>Categoria</TableHead>
-                          <TableHead>Subcategoria</TableHead>
-                          <TableHead>Vínculo</TableHead>
-                          <TableHead>Ações</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {parsedTransactions.map((transaction, index) => {
-                          const categoryType = getCategoryType(transactionCategories[index]?.category_id || '');
-                          const availableSubcategories = getSubcategoriesForCategory(transactionCategories[index]?.category_id || '');
-                          
-                          return (
-                             <TableRow key={index}>
-                              <TableCell className="text-sm">
-                                <Input
-                                  type="date"
-                                  value={transaction.date}
-                                  onChange={(e) => handleEditTransaction(index, 'date', e.target.value)}
-                                  className="w-32"
-                                />
-                              </TableCell>
-                              <TableCell className="text-sm font-medium">
-                                <Input
-                                  value={transaction.description}
-                                  onChange={(e) => handleEditTransaction(index, 'description', e.target.value)}
-                                  className="min-w-[200px]"
-                                />
-                              </TableCell>
-                              <TableCell className="text-sm">
-                                <Input
-                                  type="number"
-                                  step="0.01"
-                                  value={transaction.amount}
-                                  onChange={(e) => handleEditTransaction(index, 'amount', e.target.value)}
-                                  className="w-24"
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Select
-                                  value={transaction.type}
-                                  onValueChange={(value) => handleEditTransaction(index, 'type', value)}
+                  <div className="space-y-4">
+                    {parsedTransactions.map((transaction, index) => {
+                      const categoryData = transactionCategories[index];
+                      const selectedCategory = categories.find(c => c.id === parseInt(categoryData?.category_id));
+                      const availableSubcategories = subcategories.filter(s => s.category_id === parseInt(categoryData?.category_id));
+                      
+                      return (
+                        <Card key={index} className="p-4">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Data</Label>
+                              <Input
+                                type="date"
+                                value={transaction.date}
+                                onChange={(e) => handleEditTransaction(index, 'date', e.target.value)}
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Descrição</Label>
+                              <Input
+                                value={transaction.description}
+                                onChange={(e) => handleEditTransaction(index, 'description', e.target.value)}
+                                placeholder="Descrição da transação"
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Valor</Label>
+                              <Input
+                                type="number"
+                                step="0.01"
+                                value={transaction.amount}
+                                onChange={(e) => handleEditTransaction(index, 'amount', e.target.value)}
+                              />
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Tipo</Label>
+                              <Select 
+                                value={transaction.type} 
+                                onValueChange={(value) => handleEditTransaction(index, 'type', value as Database['public']['Enums']['transaction_type'])}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="Income">Receita</SelectItem>
+                                  <SelectItem value="Expense">Despesa</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Categoria</Label>
+                              <Select 
+                                value={categoryData?.category_id || ''} 
+                                onValueChange={(value) => handleCategoryChange(index, value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecionar categoria" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {categories.map((category) => (
+                                    <SelectItem key={category.id} value={category.id.toString()}>
+                                      {category.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Subcategoria</Label>
+                              <Select 
+                                value={categoryData?.subcategory_id || ''} 
+                                onValueChange={(value) => handleSubcategoryChange(index, value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Selecionar subcategoria" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="">Sem subcategoria</SelectItem>
+                                  {availableSubcategories.map((subcategory) => (
+                                    <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
+                                      {subcategory.name}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Vínculo</Label>
+                              {selectedCategory?.type === 'Investment' && (
+                                <Select 
+                                  value={categoryData?.investment_id || ''} 
+                                  onValueChange={(value) => handlePatrimonyChange(index, 'investment_id', value)}
                                 >
-                                  <SelectTrigger className="w-28">
-                                    <SelectValue />
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecionar investimento" />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-background">
-                                    <SelectItem value="Expense">Despesa</SelectItem>
-                                    <SelectItem value="Income">Receita</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              </TableCell>
-                              <TableCell className="min-w-[150px]">
-                                <Select
-                                  value={transactionCategories[index]?.category_id || ''}
-                                  onValueChange={(value) => handleCategoryChange(index, value)}
-                                >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Categoria" />
-                                  </SelectTrigger>
-                                  <SelectContent className="bg-background">
-                                    {categories.map((category) => (
-                                      <SelectItem key={category.id} value={category.id.toString()}>
-                                        {category.name}
+                                  <SelectContent>
+                                    {investments.map((investment) => (
+                                      <SelectItem key={investment.id} value={investment.id.toString()}>
+                                        {investment.name}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                              </TableCell>
-                              <TableCell className="min-w-[150px]">
-                                <Select
-                                  value={transactionCategories[index]?.subcategory_id || ''}
-                                  onValueChange={(value) => handleSubcategoryChange(index, value)}
-                                  disabled={availableSubcategories.length === 0}
+                              )}
+                              {selectedCategory?.type === 'Debt' && (
+                                <Select 
+                                  value={categoryData?.debt_id || ''} 
+                                  onValueChange={(value) => handlePatrimonyChange(index, 'debt_id', value)}
                                 >
-                                  <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="Subcategoria" />
+                                  <SelectTrigger>
+                                    <SelectValue placeholder="Selecionar dívida" />
                                   </SelectTrigger>
-                                  <SelectContent className="bg-background">
-                                    {availableSubcategories.map((subcategory) => (
-                                      <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
-                                        {subcategory.name}
+                                  <SelectContent>
+                                    {debts.map((debt) => (
+                                      <SelectItem key={debt.id} value={debt.id.toString()}>
+                                        {debt.description}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                              </TableCell>
-                              <TableCell className="min-w-[150px]">
-                                {categoryType === 'Debt' && (
-                                  <Select
-                                    value={transactionCategories[index]?.debt_id || ''}
-                                    onValueChange={(value) => handlePatrimonyChange(index, 'debt_id', value)}
-                                  >
-                                    <SelectTrigger className="w-full">
-                                      <SelectValue placeholder="Dívida" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-background">
-                                      {debts.map((debt) => (
-                                        <SelectItem key={debt.id} value={debt.id.toString()}>
-                                          {debt.description}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                                {categoryType === 'Investment' && (
-                                  <Select
-                                    value={transactionCategories[index]?.investment_id || ''}
-                                    onValueChange={(value) => handlePatrimonyChange(index, 'investment_id', value)}
-                                  >
-                                    <SelectTrigger className="w-full">
-                                      <SelectValue placeholder="Investimento" />
-                                    </SelectTrigger>
-                                    <SelectContent className="bg-background">
-                                      {investments.map((investment) => (
-                                        <SelectItem key={investment.id} value={investment.id.toString()}>
-                                          {investment.name}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                )}
-                                 {!categoryType && (
-                                   <span className="text-sm text-muted-foreground">-</span>
-                                 )}
-                               </TableCell>
-                               <TableCell>
-                                 <Button
-                                   variant="outline"
-                                   size="sm"
-                                   onClick={() => handleDeleteTransaction(index)}
-                                   className="text-red-600 hover:text-red-800 hover:bg-red-50"
-                                 >
-                                   <Trash2 className="h-4 w-4" />
-                                 </Button>
-                               </TableCell>
-                             </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
+                              )}
+                              {(!selectedCategory || (selectedCategory.type !== 'Investment' && selectedCategory.type !== 'Debt')) && (
+                                <Input disabled placeholder="Não aplicável" />
+                              )}
+                            </div>
+                            
+                            <div className="space-y-2">
+                              <Label className="text-sm font-medium">Ações</Label>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleDeleteTransaction(index)}
+                                className="w-full text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Remover
+                              </Button>
+                            </div>
+                          </div>
+                        </Card>
+                      );
+                    })}
                   </div>
                 </CardContent>
               </Card>

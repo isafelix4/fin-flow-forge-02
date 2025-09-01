@@ -50,21 +50,58 @@ export default function Transacoes() {
 
   const fetchTransactions = async () => {
     try {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select(`
-          *,
-          accounts(name),
-          categories(name, type),
-          subcategories(name),
-          investments(name),
-          debts(description)
-        `)
-        .eq('user_id', user?.id)
-        .order(sortBy, { ascending: sortOrder === 'asc' });
+      // Handle special sorting for category and subcategory names
+      if (sortBy === 'category_id' || sortBy === 'subcategory_id') {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select(`
+            *,
+            accounts(name),
+            categories(name, type),
+            subcategories(name),
+            investments(name),
+            debts(description)
+          `)
+          .eq('user_id', user?.id);
 
-      if (error) throw error;
-      setTransactions(data || []);
+        if (error) throw error;
+        
+        const sortedData = (data || []).sort((a, b) => {
+          let aValue, bValue;
+          
+          if (sortBy === 'category_id') {
+            aValue = a.categories?.name || '';
+            bValue = b.categories?.name || '';
+          } else { // subcategory_id
+            aValue = a.subcategories?.name || '';
+            bValue = b.subcategories?.name || '';
+          }
+          
+          if (sortOrder === 'asc') {
+            return aValue.localeCompare(bValue, 'pt-BR');
+          } else {
+            return bValue.localeCompare(aValue, 'pt-BR');
+          }
+        });
+        
+        setTransactions(sortedData);
+      } else {
+        const { data, error } = await supabase
+          .from('transactions')
+          .select(`
+            *,
+            accounts(name),
+            categories(name, type),
+            subcategories(name),
+            investments(name),
+            debts(description)
+          `)
+          .eq('user_id', user?.id)
+          .order(sortBy, { ascending: sortOrder === 'asc' });
+
+        if (error) throw error;
+        setTransactions(data || []);
+      }
     } catch (error) {
       console.error('Error fetching transactions:', error);
       toast({
