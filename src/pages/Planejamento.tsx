@@ -574,6 +574,7 @@ const Planejamento = () => {
         planType={modalPlanType}
         onAddItem={addBudgetItem}
         existingBudgets={budgets}
+        categories={categories}
       />
     </div>
   );

@@ -1,15 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
+import { ArrowLeft } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 interface Category {
   id: number;
   name: string;
+  subcategories?: Subcategory[];
 }
 
 interface Subcategory {
@@ -31,98 +30,66 @@ interface ImprovedAddBudgetModalProps {
   planType: 'RECEITA' | 'DESPESA';
   onAddItem: (item: BudgetItem) => Promise<void>;
   existingBudgets: Array<{ category_id: number; subcategory_id: number | null; plan_type: string }>;
+  categories: Category[];
 }
 
-export function ImprovedAddBudgetModal({ open, onOpenChange, planType, onAddItem, existingBudgets }: ImprovedAddBudgetModalProps) {
-  const { user } = useAuth();
+export function ImprovedAddBudgetModal({ open, onOpenChange, planType, onAddItem, existingBudgets, categories }: ImprovedAddBudgetModalProps) {
   const { toast } = useToast();
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
-  const [selectedCategoryId, setSelectedCategoryId] = useState<string>('');
-  const [selectedSubcategoryId, setSelectedSubcategoryId] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [view, setView] = useState<'categories' | 'subcategories'>('categories');
+  const [selectedCategory, setSelectedCategory] = useState<Category | null>(null);
+  const [searchValue, setSearchValue] = useState('');
 
+  // Reset state when modal opens/closes
   useEffect(() => {
-    if (open && user) {
-      loadCategories();
+    if (!open) {
+      setView('categories');
+      setSelectedCategory(null);
+      setSearchValue('');
     }
-  }, [open, user]);
+  }, [open]);
 
-  useEffect(() => {
-    if (selectedCategoryId) {
-      loadSubcategories(parseInt(selectedCategoryId));
+  const handleCategorySelect = (category: Category) => {
+    setSelectedCategory(category);
+    setSearchValue('');
+    
+    // Check if category has available subcategories
+    const categorySubcategories = category.subcategories || [];
+    const hasAvailableSubcategories = categorySubcategories.some(sub => 
+      !existingBudgets.some(b => 
+        b.category_id === category.id && 
+        b.subcategory_id === sub.id && 
+        b.plan_type === planType
+      )
+    );
+
+    // Check if main category is available
+    const isCategoryAvailable = !existingBudgets.some(b => 
+      b.category_id === category.id && 
+      b.subcategory_id === null && 
+      b.plan_type === planType
+    );
+
+    // If only main category is available or no subcategories, add directly
+    if (!hasAvailableSubcategories && isCategoryAvailable) {
+      handleItemAdd(category.id, null, category.name);
+    } else if (hasAvailableSubcategories) {
+      setView('subcategories');
     } else {
-      setSubcategories([]);
-      setSelectedSubcategoryId('');
-    }
-  }, [selectedCategoryId]);
-
-  const loadCategories = async () => {
-    if (!user) return;
-    
-    try {
-      setLoading(true);
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, name')
-        .eq('user_id', user.id)
-        .order('name');
-
-      if (error) throw error;
-      setCategories(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar categorias:', error);
+      // Nothing available for this category
       toast({
-        title: "Erro",
-        description: "Erro ao carregar categorias",
-        variant: "destructive"
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const loadSubcategories = async (categoryId: number) => {
-    if (!user) return;
-    
-    try {
-      const { data, error } = await supabase
-        .from('subcategories')
-        .select('id, name, category_id')
-        .eq('category_id', categoryId)
-        .eq('user_id', user.id)
-        .order('name');
-
-      if (error) throw error;
-      setSubcategories(data || []);
-    } catch (error) {
-      console.error('Erro ao carregar subcategorias:', error);
-      toast({
-        title: "Erro",
-        description: "Erro ao carregar subcategorias",
+        title: "Aviso",
+        description: "Esta categoria já foi completamente adicionada ao planejamento",
         variant: "destructive"
       });
     }
   };
 
-  const handleCategoryChange = (categoryId: string) => {
-    setSelectedCategoryId(categoryId);
-    setSelectedSubcategoryId('');
+  const handleSubcategorySelect = (subcategoryId: number, subcategoryName: string) => {
+    if (!selectedCategory) return;
+    handleItemAdd(selectedCategory.id, subcategoryId, selectedCategory.name, subcategoryName);
   };
 
-  const handleAdd = async () => {
-    if (!selectedCategoryId) {
-      toast({
-        title: "Erro",
-        description: "Selecione uma categoria",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    const categoryId = parseInt(selectedCategoryId);
-    const subcategoryId = selectedSubcategoryId ? parseInt(selectedSubcategoryId) : null;
-
+  const handleItemAdd = async (categoryId: number, subcategoryId: number | null, categoryName: string, subcategoryName?: string) => {
     // Check if this combination already exists
     const exists = existingBudgets.some(b => 
       b.category_id === categoryId && 
@@ -139,118 +106,153 @@ export function ImprovedAddBudgetModal({ open, onOpenChange, planType, onAddItem
       return;
     }
 
-    const selectedCategory = categories.find(c => c.id === categoryId);
-    const selectedSubcategory = subcategories.find(s => s.id === subcategoryId);
-
     const item: BudgetItem = {
       category_id: categoryId,
       subcategory_id: subcategoryId,
-      category_name: selectedCategory?.name || '',
-      subcategory_name: selectedSubcategory?.name
+      category_name: categoryName,
+      subcategory_name: subcategoryName
     };
 
     try {
       await onAddItem(item);
-      // Reset form
-      setSelectedCategoryId('');
-      setSelectedSubcategoryId('');
       onOpenChange(false);
     } catch (error) {
       console.error('Erro ao adicionar item:', error);
     }
   };
 
-  const availableCategories = categories.filter(category => {
-    // Show categories that either don't have any budget items or have room for subcategories
-    const categoryBudgets = existingBudgets.filter(b => 
-      b.category_id === category.id && b.plan_type === planType
+  // Get available categories that have either main category or subcategories available
+  const getAvailableCategories = () => {
+    return categories.filter(category => {
+      const categoryBudgets = existingBudgets.filter(b => 
+        b.category_id === category.id && b.plan_type === planType
+      );
+      
+      // If no budgets for this category, it's available
+      if (categoryBudgets.length === 0) return true;
+      
+      // Check if main category is used
+      const usedSubcategoryIds = categoryBudgets.map(b => b.subcategory_id);
+      const hasMainCategory = usedSubcategoryIds.includes(null);
+      
+      // If main category is not used, category is available
+      if (!hasMainCategory) return true;
+      
+      // Check if there are unused subcategories
+      const categorySubcategories = category.subcategories || [];
+      const hasUnusedSubcategories = categorySubcategories.some(s => !usedSubcategoryIds.includes(s.id));
+      
+      return hasUnusedSubcategories;
+    }).filter(category => 
+      category.name.toLowerCase().includes(searchValue.toLowerCase())
     );
-    
-    // If no budgets for this category, it's available
-    if (categoryBudgets.length === 0) return true;
-    
-    // If there are budgets, check if there are still available subcategories
-    const usedSubcategoryIds = categoryBudgets.map(b => b.subcategory_id);
-    const hasMainCategory = usedSubcategoryIds.includes(null);
-    
-    // If main category is not used, category is available
-    if (!hasMainCategory) return true;
-    
-    // Check if there are unused subcategories
-    const categorySubcategories = subcategories.filter(s => s.category_id === category.id);
-    const hasUnusedSubcategories = categorySubcategories.some(s => !usedSubcategoryIds.includes(s.id));
-    
-    return hasUnusedSubcategories;
-  });
+  };
 
-  const availableSubcategories = subcategories.filter(subcategory => {
+  // Get available subcategories for selected category
+  const getAvailableSubcategories = () => {
+    if (!selectedCategory) return [];
+    
+    const categorySubcategories = selectedCategory.subcategories || [];
+    return categorySubcategories.filter(subcategory => {
+      const isNotUsed = !existingBudgets.some(b => 
+        b.category_id === selectedCategory.id && 
+        b.subcategory_id === subcategory.id && 
+        b.plan_type === planType
+      );
+      
+      return isNotUsed && subcategory.name.toLowerCase().includes(searchValue.toLowerCase());
+    });
+  };
+
+  // Check if main category is available for selected category
+  const isCategoryWithoutSubcategoryAvailable = () => {
+    if (!selectedCategory) return false;
+    
     return !existingBudgets.some(b => 
-      b.category_id === parseInt(selectedCategoryId) && 
-      b.subcategory_id === subcategory.id && 
+      b.category_id === selectedCategory.id && 
+      b.subcategory_id === null && 
       b.plan_type === planType
     );
-  });
-
-  const isCategoryWithoutSubcategoryAvailable = selectedCategoryId && !existingBudgets.some(b => 
-    b.category_id === parseInt(selectedCategoryId) && 
-    b.subcategory_id === null && 
-    b.plan_type === planType
-  );
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>
-            Adicionar {planType === 'RECEITA' ? 'Receita' : 'Despesa'} Planejada
+          <DialogTitle className="flex items-center gap-2">
+            {view === 'subcategories' && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setView('categories')}
+                className="h-6 w-6 p-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            )}
+            {view === 'categories' ? (
+              <>Adicionar {planType === 'RECEITA' ? 'Receita' : 'Despesa'} Planejada</>
+            ) : (
+              <>Subcategorias de {selectedCategory?.name}</>
+            )}
           </DialogTitle>
         </DialogHeader>
         
-        <div className="space-y-4">
-          <div className="space-y-2">
-            <Label>Categoria *</Label>
-            <Select value={selectedCategoryId} onValueChange={handleCategoryChange}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione uma categoria" />
-              </SelectTrigger>
-              <SelectContent>
-                {availableCategories.map((category) => (
-                  <SelectItem key={category.id} value={category.id.toString()}>
+        <Command className="rounded-lg border shadow-md">
+          <CommandInput 
+            placeholder={view === 'categories' ? "Buscar categorias..." : "Buscar subcategorias..."}
+            value={searchValue}
+            onValueChange={setSearchValue}
+          />
+          <CommandList>
+            <CommandEmpty>
+              {view === 'categories' ? 'Nenhuma categoria encontrada.' : 'Nenhuma subcategoria encontrada.'}
+            </CommandEmpty>
+            
+            {view === 'categories' && (
+              <CommandGroup>
+                {getAvailableCategories().map((category) => (
+                  <CommandItem
+                    key={category.id}
+                    value={category.name}
+                    onSelect={() => handleCategorySelect(category)}
+                    className="cursor-pointer"
+                  >
                     {category.name}
-                  </SelectItem>
+                  </CommandItem>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
+              </CommandGroup>
+            )}
 
-          {selectedCategoryId && (
-            <div className="space-y-2">
-              <Label>Subcategoria</Label>
-              <Select value={selectedSubcategoryId} onValueChange={setSelectedSubcategoryId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione uma subcategoria (opcional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {isCategoryWithoutSubcategoryAvailable && (
-                    <SelectItem value="">Usar apenas a categoria principal</SelectItem>
-                  )}
-                  {availableSubcategories.map((subcategory) => (
-                    <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
-                      {subcategory.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-        </div>
+            {view === 'subcategories' && selectedCategory && (
+              <CommandGroup>
+                {isCategoryWithoutSubcategoryAvailable() && (
+                  <CommandItem
+                    value="categoria-principal"
+                    onSelect={() => handleItemAdd(selectedCategory.id, null, selectedCategory.name)}
+                    className="cursor-pointer font-medium"
+                  >
+                    Usar apenas a categoria principal
+                  </CommandItem>
+                )}
+                {getAvailableSubcategories().map((subcategory) => (
+                  <CommandItem
+                    key={subcategory.id}
+                    value={subcategory.name}
+                    onSelect={() => handleSubcategorySelect(subcategory.id, subcategory.name)}
+                    className="cursor-pointer"
+                  >
+                    {subcategory.name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+          </CommandList>
+        </Command>
 
-        <div className="flex justify-end gap-2 mt-6">
+        <div className="flex justify-end gap-2 mt-4">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Cancelar
-          </Button>
-          <Button onClick={handleAdd} disabled={!selectedCategoryId || loading}>
-            Adicionar
           </Button>
         </div>
       </DialogContent>
