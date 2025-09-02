@@ -1,17 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 
 interface CategoryData {
   id: number;
   name: string;
   amount: number;
+  average?: number;
 }
 
 interface SubcategoryData {
@@ -19,18 +17,32 @@ interface SubcategoryData {
   amount: number;
 }
 
-interface GraficoDespesasInterativoProps {
-  loading: boolean;
+interface ExpenseData {
+  categoryId: number;
+  categoryName: string;
+  subcategoryId?: number;
+  subcategoryName?: string;
+  amount: number;
 }
 
-const GraficoDespesasInterativo = ({ loading }: GraficoDespesasInterativoProps) => {
-  const { user } = useAuth();
-  const { referenceMonth } = useReferenceMonth();
+interface CategoryAverage {
+  [categoryId: number]: {
+    name: string;
+    average: number;
+  };
+}
+
+interface GraficoDespesasInterativoProps {
+  loading: boolean;
+  expenseData: ExpenseData[];
+  categoryAverages: CategoryAverage;
+}
+
+const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: GraficoDespesasInterativoProps) => {
   const [viewMode, setViewMode] = useState<'categories' | 'subcategories'>('categories');
   const [selectedCategory, setSelectedCategory] = useState<CategoryData | null>(null);
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
   const [subcategoryData, setSubcategoryData] = useState<SubcategoryData[]>([]);
-  const [dataLoading, setDataLoading] = useState(false);
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -46,113 +58,63 @@ const GraficoDespesasInterativo = ({ loading }: GraficoDespesasInterativoProps) 
     },
   };
 
-  const loadCategoriesData = async () => {
-    if (!user) return;
-
-    try {
-      setDataLoading(true);
-      
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select(`
-          amount,
-          categories (
-            id,
-            name
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('type', 'Expense')
-        .eq('reference_month', referenceMonth)
-        .not('categories', 'is', null);
-
-      if (error) {
-        console.error('Error fetching category data:', error);
-        return;
-      }
-
-      // Group by category
-      const categoryMap = new Map<number, { name: string, amount: number }>();
-      
-      transactions?.forEach(t => {
-        if (t.categories) {
-          const categoryId = t.categories.id;
-          const categoryName = t.categories.name;
-          const currentData = categoryMap.get(categoryId) || { name: categoryName, amount: 0 };
-          categoryMap.set(categoryId, {
-            name: categoryName,
-            amount: currentData.amount + Number(t.amount)
-          });
-        }
-      });
-
-      const categories = Array.from(categoryMap.entries())
-        .map(([id, data]) => ({
-          id,
-          name: data.name,
-          amount: data.amount
-        }))
-        .sort((a, b) => b.amount - a.amount);
-
-      setCategoryData(categories);
-      
-    } catch (error) {
-      console.error('Error loading categories data:', error);
-    } finally {
-      setDataLoading(false);
-    }
+  const calculateVariation = (current: number, average: number) => {
+    if (average === 0) return { percentage: 0, isIncrease: false };
+    const percentage = ((current - average) / average) * 100;
+    return { percentage: Math.abs(percentage), isIncrease: current > average };
   };
 
-  const loadSubcategoriesData = async (categoryId: number) => {
-    if (!user) return;
+  const processExpenseData = () => {
+    if (!expenseData) return;
 
-    try {
-      setDataLoading(true);
-      
-      const { data: transactions, error } = await supabase
-        .from('transactions')
-        .select(`
-          amount,
-          subcategories (
-            name
-          )
-        `)
-        .eq('user_id', user.id)
-        .eq('type', 'Expense')
-        .eq('category_id', categoryId)
-        .eq('reference_month', referenceMonth)
-        .not('subcategories', 'is', null);
+    // Group by category
+    const categoryMap = new Map<number, { name: string, amount: number }>();
+    
+    expenseData.forEach(expense => {
+      const currentData = categoryMap.get(expense.categoryId) || { 
+        name: expense.categoryName, 
+        amount: 0 
+      };
+      categoryMap.set(expense.categoryId, {
+        name: expense.categoryName,
+        amount: currentData.amount + expense.amount
+      });
+    });
 
-      if (error) {
-        console.error('Error fetching subcategory data:', error);
-        return;
-      }
+    const categories = Array.from(categoryMap.entries())
+      .map(([id, data]) => ({
+        id,
+        name: data.name,
+        amount: data.amount,
+        average: categoryAverages[id]?.average || 0
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
-      // Group by subcategory
-      const subcategoryMap = new Map<string, number>();
-      
-      transactions?.forEach(t => {
-        if (t.subcategories) {
-          const subcategoryName = t.subcategories.name;
-          const currentAmount = subcategoryMap.get(subcategoryName) || 0;
-          subcategoryMap.set(subcategoryName, currentAmount + Number(t.amount));
-        }
+    setCategoryData(categories);
+  };
+
+  const loadSubcategoriesData = (categoryId: number) => {
+    if (!expenseData) return;
+
+    // Group by subcategory for the selected category
+    const subcategoryMap = new Map<string, number>();
+    
+    expenseData
+      .filter(expense => expense.categoryId === categoryId && expense.subcategoryName)
+      .forEach(expense => {
+        const subcategoryName = expense.subcategoryName!;
+        const currentAmount = subcategoryMap.get(subcategoryName) || 0;
+        subcategoryMap.set(subcategoryName, currentAmount + expense.amount);
       });
 
-      const subcategories = Array.from(subcategoryMap.entries())
-        .map(([name, amount]) => ({
-          name,
-          amount
-        }))
-        .sort((a, b) => b.amount - a.amount);
+    const subcategories = Array.from(subcategoryMap.entries())
+      .map(([name, amount]) => ({
+        name,
+        amount
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
-      setSubcategoryData(subcategories);
-      
-    } catch (error) {
-      console.error('Error loading subcategories data:', error);
-    } finally {
-      setDataLoading(false);
-    }
+    setSubcategoryData(subcategories);
   };
 
   const handleCategoryClick = (data: any) => {
@@ -170,21 +132,19 @@ const GraficoDespesasInterativo = ({ loading }: GraficoDespesasInterativoProps) 
     setSubcategoryData([]);
   };
 
-  // Reset to categories view when reference month changes
+  // Process expense data when it changes
+  useEffect(() => {
+    processExpenseData();
+  }, [expenseData, categoryAverages]);
+
+  // Reset to categories view when expense data changes
   useEffect(() => {
     handleBackToCategories();
-  }, [referenceMonth]);
-
-  // Load categories data when component mounts or reference month changes
-  useEffect(() => {
-    if (viewMode === 'categories') {
-      loadCategoriesData();
-    }
-  }, [referenceMonth, user, viewMode]);
+  }, [expenseData]);
 
   const currentData = viewMode === 'categories' ? categoryData : subcategoryData;
   const isEmpty = currentData.length === 0;
-  const isLoading = loading || dataLoading;
+  const isLoading = loading;
 
   return (
     <Card className="lg:col-span-2">
@@ -204,7 +164,7 @@ const GraficoDespesasInterativo = ({ loading }: GraficoDespesasInterativoProps) 
           <CardTitle>
             {viewMode === 'categories' 
               ? 'Despesas por Categoria'
-              : `Despesas em ${selectedCategory?.name}`
+              : `Despesas em ${selectedCategory?.name} (Total: ${formatCurrency(selectedCategory?.amount || 0)})`
             }
           </CardTitle>
         </div>
@@ -239,11 +199,32 @@ const GraficoDespesasInterativo = ({ loading }: GraficoDespesasInterativoProps) 
                   tickFormatter={(value) => formatCurrency(value)}
                 />
                 <ChartTooltip 
-                  content={<ChartTooltipContent />}
-                  formatter={(value: any) => [formatCurrency(value), 'Valor']}
-                  labelFormatter={(label) => 
-                    `${viewMode === 'categories' ? 'Categoria' : 'Subcategoria'}: ${label}`
-                  }
+                  content={({ active, payload, label }) => {
+                    if (!active || !payload || !payload.length) return null;
+                    
+                    const data = payload[0].payload;
+                    const value = payload[0].value as number;
+                    
+                    return (
+                      <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
+                        <p className="font-medium">{`${viewMode === 'categories' ? 'Categoria' : 'Subcategoria'}: ${label}`}</p>
+                        <p className="text-primary">Valor do Mês: {formatCurrency(value)}</p>
+                        {viewMode === 'categories' && data.average > 0 && (
+                          <>
+                            <p className="text-muted-foreground">Média (3m): {formatCurrency(data.average)}</p>
+                            <p className={`text-sm ${
+                              value > data.average ? 'text-red-500' : 'text-green-500'
+                            }`}>
+                              Variação: {(() => {
+                                const variation = calculateVariation(value, data.average);
+                                return `${variation.isIncrease ? '+' : '-'}${variation.percentage.toFixed(0)}%`;
+                              })()}
+                            </p>
+                          </>
+                        )}
+                      </div>
+                    );
+                  }}
                 />
                 <Bar 
                   dataKey="amount" 
@@ -252,6 +233,19 @@ const GraficoDespesasInterativo = ({ loading }: GraficoDespesasInterativoProps) 
                   className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
                   onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
                 />
+                {viewMode === 'categories' && categoryData.some(cat => cat.average > 0) && (
+                  categoryData.map((cat, index) => (
+                    cat.average > 0 && (
+                      <ReferenceLine
+                        key={`ref-${index}`}
+                        y={cat.average}
+                        stroke="hsl(var(--muted-foreground))"
+                        strokeDasharray="3 3"
+                        strokeWidth={1}
+                      />
+                    )
+                  ))
+                )}
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
