@@ -391,13 +391,17 @@ export default function ImportarTransacoes() {
       const columns = parseCSVLine(line, delimiter);
       
       if (columns.length !== 3) {
-        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas (Data${delimiter}Descrição${delimiter}Valor), encontradas ${columns.length}. 
-Linha atual: "${line}"
-Colunas encontradas: ${JSON.stringify(columns)}
-Verifique o formato do arquivo.`);
+        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas (Data, Descrição, Valor), mas foram encontradas ${columns.length}. Verifique se o delimitador (ponto e vírgula ou vírgula) está correto e se não há linhas incompletas.`);
       }
 
       const [dateStr, description, amountStr] = columns;
+
+      // --- INÍCIO DA CORREÇÃO ---
+      // Adiciona validação para garantir que todas as colunas existem
+      if (typeof dateStr !== 'string' || typeof description !== 'string' || typeof amountStr !== 'string') {
+        throw new Error(`Erro na linha ${i + 1}: A linha está malformada. Verifique se todas as três colunas (Data, Descrição, Valor) estão presentes.`);
+      }
+      // --- FIM DA CORREÇÃO ---
 
       // Parse date (DD/MM/YYYY format)
       const dateParts = dateStr.split('/');
