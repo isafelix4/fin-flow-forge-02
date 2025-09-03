@@ -233,18 +233,16 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                   className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
                   onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
                 />
-                {viewMode === 'categories' && categoryData.some(cat => cat.average > 0) && (
-                  categoryData.map((cat, index) => (
-                    cat.average > 0 && (
-                      <ReferenceLine
-                        key={`ref-${index}`}
-                        y={cat.average}
-                        stroke="hsl(var(--muted-foreground))"
-                        strokeDasharray="3 3"
-                        strokeWidth={1}
-                      />
-                    )
-                  ))
+                {/* Add a secondary bar to show averages when in categories view */}
+                {viewMode === 'categories' && (
+                  <Bar 
+                    dataKey="average" 
+                    fill="hsl(var(--muted-foreground))"
+                    fillOpacity={0.3}
+                    stroke="hsl(var(--muted-foreground))"
+                    strokeWidth={2}
+                    strokeDasharray="3 3"
+                  />
                 )}
               </BarChart>
             </ResponsiveContainer>
