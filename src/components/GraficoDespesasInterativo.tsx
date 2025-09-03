@@ -200,30 +200,29 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                 />
                 <ChartTooltip 
                   content={({ active, payload, label }) => {
-                    if (!active || !payload || !payload.length) return null;
-                    
-                    const data = payload[0].payload;
-                    const value = payload[0].value as number;
-                    
-                    return (
-                      <div className="bg-background border border-border rounded-lg p-3 shadow-lg">
-                        <p className="font-medium">{`${viewMode === 'categories' ? 'Categoria' : 'Subcategoria'}: ${label}`}</p>
-                        <p className="text-primary">Valor do Mês: {formatCurrency(value)}</p>
-                        {viewMode === 'categories' && data.average > 0 && (
-                          <>
-                            <p className="text-muted-foreground">Média (3m): {formatCurrency(data.average)}</p>
-                            <p className={`text-sm ${
-                              value > data.average ? 'text-red-500' : 'text-green-500'
-                            }`}>
-                              Variação: {(() => {
-                                const variation = calculateVariation(value, data.average);
-                                return `${variation.isIncrease ? '+' : '-'}${variation.percentage.toFixed(0)}%`;
-                              })()}
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    );
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      const value = payload[0].value as number;
+
+                      return (
+                        <div className="bg-background border border-border rounded-lg p-3 shadow-lg text-sm">
+                          <p className="font-bold mb-1">{label}</p>
+                          <p className="text-primary">Valor do Mês: {formatCurrency(value)}</p>
+                          {viewMode === 'categories' && data.average > 0 && (
+                            <>
+                              <p className="text-xs text-muted-foreground">Média (3m): {formatCurrency(data.average)}</p>
+                              <p className={`text-xs font-semibold ${value > data.average ? 'text-red-500' : 'text-green-500'}`}>
+                                Variação: {(() => {
+                                  const variation = calculateVariation(value, data.average);
+                                  return `${variation.isIncrease ? '+' : '-'}${variation.percentage.toFixed(1)}%`;
+                                })()}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
                   }}
                 />
                 <Bar 
@@ -233,17 +232,17 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                   className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
                   onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
                 />
-                {/* Add a secondary bar to show averages when in categories view */}
-                {viewMode === 'categories' && (
-                  <Bar 
-                    dataKey="average" 
-                    fill="hsl(var(--muted-foreground))"
-                    fillOpacity={0.3}
-                    stroke="hsl(var(--muted-foreground))"
-                    strokeWidth={2}
-                    strokeDasharray="3 3"
-                  />
-                )}
+                {viewMode === 'categories' && categoryData.map((cat) => (
+                  cat.average > 0 && (
+                    <ReferenceLine
+                      key={`avg-${cat.id}`}
+                      y={cat.average}
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeDasharray="3 3"
+                      strokeWidth={1}
+                    />
+                  )
+                ))}
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
