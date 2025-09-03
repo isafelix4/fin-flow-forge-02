@@ -10,7 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { format, startOfMonth, subMonths } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Link } from 'react-router-dom';
-import { Upload, TrendingUp, Filter } from 'lucide-react';
+import { Upload, TrendingUp, Filter, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GraficoDespesasInterativo from '@/components/GraficoDespesasInterativo';
 
@@ -342,12 +342,21 @@ const Index = () => {
                   {loading ? '...' : formatCurrency(dashboardData.income)}
                 </div>
                 {!loading && historicalAverage.income > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <div className="flex items-center gap-1 mt-1">
                     {(() => {
                       const variation = calculateVariation(dashboardData.income, historicalAverage.income);
-                      return `${variation.isIncrease ? '↑' : '↓'} ${variation.percentage.toFixed(0)}% vs. média dos 3 meses`;
+                      const Icon = variation.isIncrease ? ArrowUp : ArrowDown;
+                      const colorClass = variation.isIncrease ? 'text-green-600' : 'text-red-600';
+                      return (
+                        <>
+                          <Icon className={`h-3 w-3 ${colorClass}`} />
+                          <p className={`text-xs ${colorClass}`}>
+                            {variation.percentage.toFixed(0)}% vs. média dos 3 meses
+                          </p>
+                        </>
+                      );
                     })()}
-                  </p>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -363,12 +372,21 @@ const Index = () => {
                   {loading ? '...' : formatCurrency(dashboardData.expenses)}
                 </div>
                 {!loading && historicalAverage.expenses > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">
+                  <div className="flex items-center gap-1 mt-1">
                     {(() => {
                       const variation = calculateVariation(dashboardData.expenses, historicalAverage.expenses);
-                      return `${variation.isIncrease ? '↑' : '↓'} ${variation.percentage.toFixed(0)}% vs. média dos 3 meses`;
+                      const Icon = variation.isIncrease ? ArrowUp : ArrowDown;
+                      const colorClass = variation.isIncrease ? 'text-red-600' : 'text-green-600';
+                      return (
+                        <>
+                          <Icon className={`h-3 w-3 ${colorClass}`} />
+                          <p className={`text-xs ${colorClass}`}>
+                            {variation.percentage.toFixed(0)}% vs. média dos 3 meses
+                          </p>
+                        </>
+                      );
                     })()}
-                  </p>
+                  </div>
                 )}
               </CardContent>
             </Card>
@@ -440,11 +458,13 @@ const Index = () => {
         </div>
 
         {/* Charts Section */}
-        <GraficoDespesasInterativo 
-          loading={loading}
-          expenseData={currentExpenseData}
-          categoryAverages={categoryAverages}
-        />
+        <div className="w-full">
+          <GraficoDespesasInterativo 
+            loading={loading}
+            expenseData={currentExpenseData}
+            categoryAverages={categoryAverages}
+          />
+        </div>
       </main>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, LabelList, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 
@@ -57,6 +57,8 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
       color: "hsl(var(--chart-1))",
     },
   };
+
+  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8442ff', '#ff42b3', '#42a5f5', '#66bb6a', '#ffa726', '#ab47bc'];
 
   const calculateVariation = (current: number, average: number) => {
     if (average === 0) return { percentage: 0, isIncrease: false };
@@ -147,7 +149,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
   const isLoading = loading;
 
   return (
-    <Card className="lg:col-span-2">
+    <Card className="w-full">
       <CardHeader>
         <div className="flex items-center gap-4">
           {viewMode === 'subcategories' && (
@@ -231,7 +233,18 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                   radius={[4, 4, 0, 0]}
                   className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
                   onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
-                />
+                >
+                  {viewMode === 'categories' && currentData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                  <LabelList 
+                    dataKey="amount" 
+                    position="top" 
+                    fill="hsl(var(--foreground))"
+                    formatter={(value: number) => formatCurrency(value)}
+                    fontSize={12}
+                  />
+                </Bar>
                 {viewMode === 'categories' && categoryData.map((cat) => (
                   cat.average > 0 && (
                     <ReferenceLine
