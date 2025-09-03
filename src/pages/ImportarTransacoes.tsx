@@ -64,7 +64,7 @@ interface ParsedTransaction {
 export default function ImportarTransacoes() {
   const { user } = useAuth();
   const { toast } = useToast();
-
+  
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
@@ -73,7 +73,7 @@ export default function ImportarTransacoes() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [step, setStep] = useState<'upload' | 'categorize'>('upload');
-
+  
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<CSVRow[]>([]);
@@ -145,7 +145,7 @@ export default function ImportarTransacoes() {
     const detectDelimiter = (sampleLines: string[]): string => {
       const delimiters = [';', ',', '\t'];
       const scores: Record<string, number> = { ';': 0, ',': 0, '\t': 0 };
-
+      
       for (const line of sampleLines.slice(0, Math.min(3, sampleLines.length))) {
         for (const delimiter of delimiters) {
           const parts = line.split(delimiter);
@@ -156,7 +156,7 @@ export default function ImportarTransacoes() {
           }
         }
       }
-
+      
       // Return delimiter with highest score, defaulting to semicolon for Brazilian CSVs
       const bestDelimiter = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
       return bestDelimiter;
@@ -175,10 +175,10 @@ export default function ImportarTransacoes() {
         let current = '';
         let inQuotes = false;
         let quoteChar = '';
-
+        
         for (let j = 0; j < line.length; j++) {
           const char = line[j];
-
+          
           if (!inQuotes && (char === '"' || char === "'")) {
             inQuotes = true;
             quoteChar = char;
@@ -198,13 +198,13 @@ export default function ImportarTransacoes() {
             current += char;
           }
         }
-
+        
         result.push(current.trim());
         return result;
       };
 
       const columns = parseCSVLine(line, delimiter);
-
+      
       if (columns.length !== 3) {
         throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas (Data${delimiter}Descrição${delimiter}Valor), encontradas ${columns.length}. 
 Linha atual: "${line}"
@@ -222,30 +222,30 @@ Verifique o formato do arquivo.`);
 
       const [day, month, year] = dateParts;
       const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-
+      
       if (isNaN(date.getTime())) {
         throw new Error(`Erro na linha ${i + 1}: data inválida`);
       }
 
       // Parse amount - handle Brazilian decimal format more robustly
       let normalizedAmount = amountStr.trim();
-
+      
       // Remove currency symbols and extra spaces
       normalizedAmount = normalizedAmount.replace(/[R$\s]+/g, '');
-
+      
       // Handle various Brazilian number formats
       // Examples: "1.234,56", "1234,56", "1.234.567,89", "-1.234,56"
-
+      
       // Count dots and commas to determine format
       const dotCount = (normalizedAmount.match(/\./g) || []).length;
       const commaCount = (normalizedAmount.match(/,/g) || []).length;
-
+      
       if (commaCount === 1 && dotCount >= 1) {
         // Format like "1.234,56" or "12.345.678,90" - dots are thousands, comma is decimal
         const lastCommaIndex = normalizedAmount.lastIndexOf(',');
         const beforeComma = normalizedAmount.substring(0, lastCommaIndex);
         const afterComma = normalizedAmount.substring(lastCommaIndex + 1);
-
+        
         // Remove dots (thousands separators) and replace comma with dot
         normalizedAmount = beforeComma.replace(/\./g, '') + '.' + afterComma;
       } else if (commaCount === 1 && dotCount === 0) {
@@ -272,7 +272,7 @@ Verifique o formato do arquivo.`);
           normalizedAmount = normalizedAmount.replace(/\./g, '');
         }
       }
-
+      
       const amount = parseFloat(normalizedAmount);
       if (isNaN(amount)) {
         throw new Error(`Erro na linha ${i + 1}: valor inválido "${amountStr}". Formatos suportados: 1.234,56 ou 1234,56 ou 1234.56`);
@@ -474,7 +474,7 @@ Verifique o formato do arquivo.`);
 
         // Validate category dependencies
         const selectedCategory = categories.find(c => c.id === parseInt(categoryData.category_id));
-
+        
         if (selectedCategory?.type === 'Debt' && !categoryData.debt_id) {
           toast({
             title: "Erro",
@@ -533,7 +533,7 @@ Verifique o formato do arquivo.`);
         reference_month: new Date().toISOString().slice(0, 7) + '-01'
       });
       setStep('upload');
-
+      
       // Reset file input
       const fileInput = document.getElementById('csv-file') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
@@ -551,13 +551,6 @@ Verifique o formato do arquivo.`);
   };
 
   // Month/Year picker - now dynamic, no need for fixed options
-
-
-
-
-
-
-
 
   const getSubcategoriesForCategory = (categoryId: string) => {
     return subcategories.filter(sub => sub.category_id === parseInt(categoryId));
@@ -584,7 +577,7 @@ Verifique o formato do arquivo.`);
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-6">Importar Extrato</h1>
-
+          
           {/* Instructions */}
            <Alert className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -652,16 +645,6 @@ Verifique o formato do arquivo.`);
                     onValueChange={(value) => setFormData({ ...formData, reference_month: value })}
                     placeholder="Selecione o mês de referência"
                   />
-
-
-
-
-
-
-
-
-
-
                 </div>
 
                 {/* Process File Button */}
@@ -691,7 +674,7 @@ Verifique o formato do arquivo.`);
                     Encontramos {parsedTransactions.length} transações no seu arquivo. 
                     Configure a categoria para cada uma individualmente:
                   </p>
-
+                  
                   <div className="overflow-x-auto">
                      <Table>
                       <TableHeader>
@@ -710,7 +693,7 @@ Verifique o formato do arquivo.`);
                         {parsedTransactions.map((transaction, index) => {
                           const categoryType = getCategoryType(transactionCategories[index]?.category_id || '');
                           const availableSubcategories = getSubcategoriesForCategory(transactionCategories[index]?.category_id || '');
-
+                          
                           return (
                              <TableRow key={index}>
                               <TableCell className="text-sm">
@@ -872,3 +855,4 @@ Verifique o formato do arquivo.`);
       </div>
     </div>
   );
+}
