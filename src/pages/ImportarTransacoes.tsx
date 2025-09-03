@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
@@ -13,190 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 import { Database } from '@/integrations/supabase/types';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
-// Performance-optimized transaction row component
-const TransactionRow = React.memo(({ 
-  transaction, 
-  index, 
-  categoryData, 
-  categories, 
-  subcategories, 
-  investments, 
-  debts, 
-  handleEditTransaction, 
-  handleCategoryChange, 
-  handleSubcategoryChange, 
-  handlePatrimonyChange, 
-  handleDeleteTransaction 
-}: {
-  transaction: ParsedTransaction;
-  index: number;
-  categoryData: CSVRow;
-  categories: Category[];
-  subcategories: Subcategory[];
-  investments: Investment[];
-  debts: Debt[];
-  handleEditTransaction: (index: number, field: keyof ParsedTransaction, value: string | number) => void;
-  handleCategoryChange: (index: number, categoryId: string) => void;
-  handleSubcategoryChange: (index: number, subcategoryId: string) => void;
-  handlePatrimonyChange: (index: number, field: 'investment_id' | 'debt_id', value: string) => void;
-  handleDeleteTransaction: (index: number) => void;
-}) => {
-  // Pre-compute data to avoid recalculating in render
-  const selectedCategory = useMemo(() => 
-    categories.find(c => c.id === parseInt(categoryData?.category_id)), 
-    [categories, categoryData?.category_id]
-  );
-  
-  const availableSubcategories = useMemo(() => 
-    subcategories.filter(s => s.category_id === parseInt(categoryData?.category_id)),
-    [subcategories, categoryData?.category_id]
-  );
-
-  return (
-    <Card className="p-4 mb-4">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Data</Label>
-          <Input
-            type="date"
-            value={transaction.date}
-            onChange={(e) => handleEditTransaction(index, 'date', e.target.value)}
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Descrição</Label>
-          <Input
-            value={transaction.description}
-            onChange={(e) => handleEditTransaction(index, 'description', e.target.value)}
-            placeholder="Descrição da transação"
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Valor</Label>
-          <Input
-            type="number"
-            step="0.01"
-            value={transaction.amount}
-            onChange={(e) => handleEditTransaction(index, 'amount', e.target.value)}
-          />
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Tipo</Label>
-          <Select 
-            value={transaction.type} 
-            onValueChange={(value) => handleEditTransaction(index, 'type', value as Database['public']['Enums']['transaction_type'])}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="Income">Receita</SelectItem>
-              <SelectItem value="Expense">Despesa</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Categoria</Label>
-          <Select 
-            value={categoryData?.category_id || ''} 
-            onValueChange={(value) => handleCategoryChange(index, value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecionar categoria" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category.id} value={category.id.toString()}>
-                  {category.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Subcategoria</Label>
-          <Select 
-            value={categoryData?.subcategory_id || ''} 
-            onValueChange={(value) => handleSubcategoryChange(index, value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Selecionar subcategoria" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="">Sem subcategoria</SelectItem>
-              {availableSubcategories.map((subcategory) => (
-                <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
-                  {subcategory.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Vínculo</Label>
-          {selectedCategory?.type === 'Investment' && (
-            <Select 
-              value={categoryData?.investment_id || ''} 
-              onValueChange={(value) => handlePatrimonyChange(index, 'investment_id', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar investimento" />
-              </SelectTrigger>
-              <SelectContent>
-                {investments.map((investment) => (
-                  <SelectItem key={investment.id} value={investment.id.toString()}>
-                    {investment.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {selectedCategory?.type === 'Debt' && (
-            <Select 
-              value={categoryData?.debt_id || ''} 
-              onValueChange={(value) => handlePatrimonyChange(index, 'debt_id', value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecionar dívida" />
-              </SelectTrigger>
-              <SelectContent>
-                {debts.map((debt) => (
-                  <SelectItem key={debt.id} value={debt.id.toString()}>
-                    {debt.description}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-          {(!selectedCategory || (selectedCategory.type !== 'Investment' && selectedCategory.type !== 'Debt')) && (
-            <Input disabled placeholder="Não aplicável" />
-          )}
-        </div>
-        
-        <div className="space-y-2">
-          <Label className="text-sm font-medium">Ações</Label>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => handleDeleteTransaction(index)}
-            className="w-full text-destructive hover:text-destructive"
-          >
-            <Trash2 className="h-4 w-4 mr-2" />
-            Remover
-          </Button>
-        </div>
-      </div>
-    </Card>
-  );
-});
-
-TransactionRow.displayName = 'TransactionRow';
 
 interface Account {
   id: number;
@@ -248,17 +64,16 @@ interface ParsedTransaction {
 export default function ImportarTransacoes() {
   const { user } = useAuth();
   const { toast } = useToast();
-  
+
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
-  const [subcategoriesCache, setSubcategoriesCache] = useState<Record<number, Subcategory[]>>({});
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [debts, setDebts] = useState<Debt[]>([]);
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [step, setStep] = useState<'upload' | 'categorize'>('upload');
-  
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [parsedTransactions, setParsedTransactions] = useState<ParsedTransaction[]>([]);
   const [transactionCategories, setTransactionCategories] = useState<CSVRow[]>([]);
@@ -330,7 +145,7 @@ export default function ImportarTransacoes() {
     const detectDelimiter = (sampleLines: string[]): string => {
       const delimiters = [';', ',', '\t'];
       const scores: Record<string, number> = { ';': 0, ',': 0, '\t': 0 };
-      
+
       for (const line of sampleLines.slice(0, Math.min(3, sampleLines.length))) {
         for (const delimiter of delimiters) {
           const parts = line.split(delimiter);
@@ -341,7 +156,7 @@ export default function ImportarTransacoes() {
           }
         }
       }
-      
+
       // Return delimiter with highest score, defaulting to semicolon for Brazilian CSVs
       const bestDelimiter = Object.keys(scores).reduce((a, b) => scores[a] > scores[b] ? a : b);
       return bestDelimiter;
@@ -360,10 +175,10 @@ export default function ImportarTransacoes() {
         let current = '';
         let inQuotes = false;
         let quoteChar = '';
-        
+
         for (let j = 0; j < line.length; j++) {
           const char = line[j];
-          
+
           if (!inQuotes && (char === '"' || char === "'")) {
             inQuotes = true;
             quoteChar = char;
@@ -383,25 +198,21 @@ export default function ImportarTransacoes() {
             current += char;
           }
         }
-        
+
         result.push(current.trim());
         return result;
       };
 
       const columns = parseCSVLine(line, delimiter);
-      
+
       if (columns.length !== 3) {
-        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas (Data, Descrição, Valor), mas foram encontradas ${columns.length}. Verifique se o delimitador (ponto e vírgula ou vírgula) está correto e se não há linhas incompletas.`);
+        throw new Error(`Erro na linha ${i + 1}: esperadas 3 colunas (Data${delimiter}Descrição${delimiter}Valor), encontradas ${columns.length}. 
+Linha atual: "${line}"
+Colunas encontradas: ${JSON.stringify(columns)}
+Verifique o formato do arquivo.`);
       }
 
       const [dateStr, description, amountStr] = columns;
-
-      // --- INÍCIO DA CORREÇÃO ---
-      // Adiciona validação para garantir que todas as colunas existem
-      if (typeof dateStr !== 'string' || typeof description !== 'string' || typeof amountStr !== 'string') {
-        throw new Error(`Erro na linha ${i + 1}: A linha está malformada. Verifique se todas as três colunas (Data, Descrição, Valor) estão presentes.`);
-      }
-      // --- FIM DA CORREÇÃO ---
 
       // Parse date (DD/MM/YYYY format)
       const dateParts = dateStr.split('/');
@@ -411,30 +222,30 @@ export default function ImportarTransacoes() {
 
       const [day, month, year] = dateParts;
       const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day));
-      
+
       if (isNaN(date.getTime())) {
         throw new Error(`Erro na linha ${i + 1}: data inválida`);
       }
 
       // Parse amount - handle Brazilian decimal format more robustly
       let normalizedAmount = amountStr.trim();
-      
+
       // Remove currency symbols and extra spaces
       normalizedAmount = normalizedAmount.replace(/[R$\s]+/g, '');
-      
+
       // Handle various Brazilian number formats
       // Examples: "1.234,56", "1234,56", "1.234.567,89", "-1.234,56"
-      
+
       // Count dots and commas to determine format
       const dotCount = (normalizedAmount.match(/\./g) || []).length;
       const commaCount = (normalizedAmount.match(/,/g) || []).length;
-      
+
       if (commaCount === 1 && dotCount >= 1) {
         // Format like "1.234,56" or "12.345.678,90" - dots are thousands, comma is decimal
         const lastCommaIndex = normalizedAmount.lastIndexOf(',');
         const beforeComma = normalizedAmount.substring(0, lastCommaIndex);
         const afterComma = normalizedAmount.substring(lastCommaIndex + 1);
-        
+
         // Remove dots (thousands separators) and replace comma with dot
         normalizedAmount = beforeComma.replace(/\./g, '') + '.' + afterComma;
       } else if (commaCount === 1 && dotCount === 0) {
@@ -461,7 +272,7 @@ export default function ImportarTransacoes() {
           normalizedAmount = normalizedAmount.replace(/\./g, '');
         }
       }
-      
+
       const amount = parseFloat(normalizedAmount);
       if (isNaN(amount)) {
         throw new Error(`Erro na linha ${i + 1}: valor inválido "${amountStr}". Formatos suportados: 1.234,56 ou 1234,56 ou 1234.56`);
@@ -603,24 +414,15 @@ export default function ImportarTransacoes() {
     };
     setTransactionCategories(newCategories);
 
+    // Fetch subcategories for this category
     if (categoryId) {
-      const categoryIdNum = parseInt(categoryId);
-      // Check if we already have subcategories in cache
-      if (subcategoriesCache[categoryIdNum]) {
-        // Use cache and ensure no duplicates in main state
-        setSubcategories(prev => [
-          ...prev.filter(s => s.category_id !== categoryIdNum), 
-          ...subcategoriesCache[categoryIdNum]
-        ]);
-      } else {
-        // Fetch from API and store in cache
-        const subcats = await fetchSubcategoriesForCategory(categoryIdNum);
-        setSubcategoriesCache(prevCache => ({...prevCache, [categoryIdNum]: subcats }));
-        setSubcategories(prev => [
-          ...prev.filter(s => s.category_id !== categoryIdNum), 
-          ...subcats
-        ]);
-      }
+      const subcats = await fetchSubcategoriesForCategory(parseInt(categoryId));
+      setSubcategories(prevSubs => {
+        const newSubs = [...prevSubs];
+        // Clear existing subcategories for this category and add new ones
+        const filtered = newSubs.filter(sub => sub.category_id !== parseInt(categoryId));
+        return [...filtered, ...subcats];
+      });
     }
   };
 
@@ -672,7 +474,7 @@ export default function ImportarTransacoes() {
 
         // Validate category dependencies
         const selectedCategory = categories.find(c => c.id === parseInt(categoryData.category_id));
-        
+
         if (selectedCategory?.type === 'Debt' && !categoryData.debt_id) {
           toast({
             title: "Erro",
@@ -731,7 +533,7 @@ export default function ImportarTransacoes() {
         reference_month: new Date().toISOString().slice(0, 7) + '-01'
       });
       setStep('upload');
-      
+
       // Reset file input
       const fileInput = document.getElementById('csv-file') as HTMLInputElement;
       if (fileInput) fileInput.value = '';
@@ -749,6 +551,13 @@ export default function ImportarTransacoes() {
   };
 
   // Month/Year picker - now dynamic, no need for fixed options
+
+
+
+
+
+
+
 
   const getSubcategoriesForCategory = (categoryId: string) => {
     return subcategories.filter(sub => sub.category_id === parseInt(categoryId));
@@ -775,7 +584,7 @@ export default function ImportarTransacoes() {
       <div className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">
           <h1 className="text-3xl font-bold mb-6">Importar Extrato</h1>
-          
+
           {/* Instructions */}
            <Alert className="mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -843,6 +652,16 @@ export default function ImportarTransacoes() {
                     onValueChange={(value) => setFormData({ ...formData, reference_month: value })}
                     placeholder="Selecione o mês de referência"
                   />
+
+
+
+
+
+
+
+
+
+
                 </div>
 
                 {/* Process File Button */}
@@ -872,25 +691,155 @@ export default function ImportarTransacoes() {
                     Encontramos {parsedTransactions.length} transações no seu arquivo. 
                     Configure a categoria para cada uma individualmente:
                   </p>
-                  
-                  <div className="space-y-4 max-h-[600px] overflow-y-auto">
-                    {parsedTransactions.map((transaction, index) => (
-                      <TransactionRow
-                        key={transaction.id || index}
-                        transaction={transaction}
-                        index={index}
-                        categoryData={transactionCategories[index]}
-                        categories={categories}
-                        subcategories={subcategories}
-                        investments={investments}
-                        debts={debts}
-                        handleEditTransaction={handleEditTransaction}
-                        handleCategoryChange={handleCategoryChange}
-                        handleSubcategoryChange={handleSubcategoryChange}
-                        handlePatrimonyChange={handlePatrimonyChange}
-                        handleDeleteTransaction={handleDeleteTransaction}
-                      />
-                    ))}
+
+                  <div className="overflow-x-auto">
+                     <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Data</TableHead>
+                          <TableHead>Descrição</TableHead>
+                          <TableHead>Valor</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Categoria</TableHead>
+                          <TableHead>Subcategoria</TableHead>
+                          <TableHead>Vínculo</TableHead>
+                          <TableHead>Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {parsedTransactions.map((transaction, index) => {
+                          const categoryType = getCategoryType(transactionCategories[index]?.category_id || '');
+                          const availableSubcategories = getSubcategoriesForCategory(transactionCategories[index]?.category_id || '');
+
+                          return (
+                             <TableRow key={index}>
+                              <TableCell className="text-sm">
+                                <Input
+                                  type="date"
+                                  value={transaction.date}
+                                  onChange={(e) => handleEditTransaction(index, 'date', e.target.value)}
+                                  className="w-32"
+                                />
+                              </TableCell>
+                              <TableCell className="text-sm font-medium">
+                                <Input
+                                  value={transaction.description}
+                                  onChange={(e) => handleEditTransaction(index, 'description', e.target.value)}
+                                  className="min-w-[200px]"
+                                />
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                <Input
+                                  type="number"
+                                  step="0.01"
+                                  value={transaction.amount}
+                                  onChange={(e) => handleEditTransaction(index, 'amount', e.target.value)}
+                                  className="w-24"
+                                />
+                              </TableCell>
+                              <TableCell>
+                                <Select
+                                  value={transaction.type}
+                                  onValueChange={(value) => handleEditTransaction(index, 'type', value)}
+                                >
+                                  <SelectTrigger className="w-28">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background">
+                                    <SelectItem value="Expense">Despesa</SelectItem>
+                                    <SelectItem value="Income">Receita</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="min-w-[150px]">
+                                <Select
+                                  value={transactionCategories[index]?.category_id || ''}
+                                  onValueChange={(value) => handleCategoryChange(index, value)}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Categoria" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background">
+                                    {categories.map((category) => (
+                                      <SelectItem key={category.id} value={category.id.toString()}>
+                                        {category.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="min-w-[150px]">
+                                <Select
+                                  value={transactionCategories[index]?.subcategory_id || ''}
+                                  onValueChange={(value) => handleSubcategoryChange(index, value)}
+                                  disabled={availableSubcategories.length === 0}
+                                >
+                                  <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Subcategoria" />
+                                  </SelectTrigger>
+                                  <SelectContent className="bg-background">
+                                    {availableSubcategories.map((subcategory) => (
+                                      <SelectItem key={subcategory.id} value={subcategory.id.toString()}>
+                                        {subcategory.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </TableCell>
+                              <TableCell className="min-w-[150px]">
+                                {categoryType === 'Debt' && (
+                                  <Select
+                                    value={transactionCategories[index]?.debt_id || ''}
+                                    onValueChange={(value) => handlePatrimonyChange(index, 'debt_id', value)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Dívida" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-background">
+                                      {debts.map((debt) => (
+                                        <SelectItem key={debt.id} value={debt.id.toString()}>
+                                          {debt.description}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                {categoryType === 'Investment' && (
+                                  <Select
+                                    value={transactionCategories[index]?.investment_id || ''}
+                                    onValueChange={(value) => handlePatrimonyChange(index, 'investment_id', value)}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue placeholder="Investimento" />
+                                    </SelectTrigger>
+                                    <SelectContent className="bg-background">
+                                      {investments.map((investment) => (
+                                        <SelectItem key={investment.id} value={investment.id.toString()}>
+                                          {investment.name}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectContent>
+                                  </Select>
+                                )}
+                                 {!categoryType && (
+                                   <span className="text-sm text-muted-foreground">-</span>
+                                 )}
+                               </TableCell>
+                               <TableCell>
+                                 <Button
+                                   variant="outline"
+                                   size="sm"
+                                   onClick={() => handleDeleteTransaction(index)}
+                                   className="text-red-600 hover:text-red-800 hover:bg-red-50"
+                                 >
+                                   <Trash2 className="h-4 w-4" />
+                                 </Button>
+                               </TableCell>
+                             </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </div>
                 </CardContent>
               </Card>
@@ -923,4 +872,3 @@ export default function ImportarTransacoes() {
       </div>
     </div>
   );
-}
