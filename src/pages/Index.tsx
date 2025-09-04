@@ -253,7 +253,7 @@ const Index = () => {
     });
   };
   return <div className="min-h-screen bg-background">
-      <Header />
+      <Header className="text-2xl font-bold text-foreground" />
       <main className="text-2xl font-bold text-foreground ">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -279,7 +279,7 @@ const Index = () => {
           <label htmlFor="month-filter" className="text-sm font-medium">
             Período de referência:
           </label>
-          <MonthYearPicker value={referenceMonth} onValueChange={setReferenceMonth} placeholder="Selecione o mês" className="w-full sm:w-auto" />
+          <MonthYearPicker value={referenceMonth} onValueChange={setReferenceMonth} placeholder="Selecione o mês" className="text-2xl font-bold text-foreground " />
         </div>
 
         {/* Fluxo de Caixa Section */}
