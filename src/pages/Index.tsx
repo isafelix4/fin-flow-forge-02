@@ -247,14 +247,15 @@ const Index = () => {
     };
   };
   const getMonthName = () => {
-    const date = new Date(referenceMonth);
-    return format(date, 'MMMM \'de\' yyyy', {
-      locale: ptBR
+    const date = new Date(referenceMonth + 'T12:00:00');
+    return date.toLocaleDateString('pt-BR', { 
+      month: 'long', 
+      year: 'numeric' 
     });
   };
   return <div className="min-h-screen bg-background">
       <Header />
-      <main className="text-2xl font-bold text-foreground ">
+      <main className="container mx-auto px-4 py-8 space-y-8">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -279,7 +280,7 @@ const Index = () => {
           <label htmlFor="month-filter" className="text-sm font-medium">
             Período de referência:
           </label>
-          <MonthYearPicker value={referenceMonth} onValueChange={setReferenceMonth} placeholder="Selecione o mês" className="text-2xl font-bold text-foreground " />
+          <MonthYearPicker value={referenceMonth} onValueChange={setReferenceMonth} placeholder="Selecione o mês" className="w-full sm:w-auto" />
         </div>
 
         {/* Fluxo de Caixa Section */}
