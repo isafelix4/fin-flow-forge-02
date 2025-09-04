@@ -119,6 +119,10 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
     setSubcategoryData(subcategories);
   };
 
+  const getCategoryColor = (categoryId: number) => {
+    return COLORS[categoryId % COLORS.length];
+  };
+
   const handleCategoryClick = (data: any) => {
     const category = categoryData.find(cat => cat.name === data.name);
     if (category) {
@@ -235,8 +239,11 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                   className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
                   onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
                 >
-                  {viewMode === 'categories' && currentData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  {viewMode === 'categories' && categoryData.map((entry) => (
+                    <Cell key={`cell-${entry.id}`} fill={getCategoryColor(entry.id)} />
+                  ))}
+                  {viewMode === 'subcategories' && subcategoryData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={selectedCategory ? getCategoryColor(selectedCategory.id) : COLORS[0]} />
                   ))}
                   <LabelList 
                     dataKey="amount" 
