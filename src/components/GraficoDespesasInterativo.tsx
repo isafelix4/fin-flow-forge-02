@@ -60,6 +60,14 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
 
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8442ff', '#ff42b3', '#42a5f5', '#66bb6a', '#ffa726', '#ab47bc'];
 
+  // Function to get consistent color for a category
+  const getCategoryColor = (categoryId: number | string) => {
+    // Use category ID to ensure consistent color assignment
+    const colorIndex = typeof categoryId === 'number' ? categoryId % COLORS.length : 
+                      categoryId.toString().split('').reduce((acc, char) => acc + char.charCodeAt(0), 0) % COLORS.length;
+    return COLORS[colorIndex];
+  };
+
   const calculateVariation = (current: number, average: number) => {
     if (average === 0) return { percentage: 0, isIncrease: false };
     const percentage = ((current - average) / average) * 100;
@@ -236,7 +244,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                   onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
                 >
                   {viewMode === 'categories' && currentData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    <Cell key={`cell-${index}`} fill={getCategoryColor((entry as CategoryData).id)} />
                   ))}
                   <LabelList 
                     dataKey="amount" 
