@@ -420,7 +420,7 @@ const Index = () => {
                 <p className="text-xs text-muted-foreground">Total pago no mês</p>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-blue-600">
+                <div className="text-2xl font-bold text-foreground">
                   {loading ? '...' : formatCurrency(dashboardData.debtPayments)}
                 </div>
               </CardContent>
