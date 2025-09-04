@@ -247,15 +247,14 @@ const Index = () => {
     };
   };
   const getMonthName = () => {
-    const date = new Date(referenceMonth + 'T12:00:00');
-    return date.toLocaleDateString('pt-BR', { 
-      month: 'long', 
-      year: 'numeric' 
+    const date = new Date(referenceMonth);
+    return format(date, 'MMMM \'de\' yyyy', {
+      locale: ptBR
     });
   };
   return <div className="min-h-screen bg-background">
       <Header />
-      <main className="container mx-auto px-4 py-8 space-y-8">
+      <main className="text-2xl font-bold text-foreground ">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
