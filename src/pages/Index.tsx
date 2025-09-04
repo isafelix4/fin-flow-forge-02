@@ -339,7 +339,7 @@ const Index = () => {
             </Card>
 
             <Card>
-              <CardHeader className="pb-2">
+              <CardHeader className="text-2xl font-bold text-foreground ">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
                   Saldo
                 </CardTitle>
