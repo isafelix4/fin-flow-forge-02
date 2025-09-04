@@ -13,7 +13,6 @@ import { Link } from 'react-router-dom';
 import { Upload, TrendingUp, Filter, ArrowUp, ArrowDown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GraficoDespesasInterativo from '@/components/GraficoDespesasInterativo';
-
 interface DashboardData {
   income: number;
   expenses: number;
@@ -22,19 +21,16 @@ interface DashboardData {
   debtPayments: number;
   investmentContributions: number;
 }
-
 interface HistoricalAverage {
   income: number;
   expenses: number;
 }
-
 interface CategoryAverage {
   [categoryId: number]: {
     name: string;
     average: number;
   };
 }
-
 interface ExpenseData {
   categoryId: number;
   categoryName: string;
@@ -42,51 +38,43 @@ interface ExpenseData {
   subcategoryName?: string;
   amount: number;
 }
-
 const Index = () => {
-  const { user } = useAuth();
-  const { toast } = useToast();
-  const { referenceMonth, setReferenceMonth } = useReferenceMonth();
+  const {
+    user
+  } = useAuth();
+  const {
+    toast
+  } = useToast();
+  const {
+    referenceMonth,
+    setReferenceMonth
+  } = useReferenceMonth();
   const [dashboardData, setDashboardData] = useState<DashboardData>({
     income: 0,
     expenses: 0,
     balance: 0,
     netWorth: 0,
     debtPayments: 0,
-    investmentContributions: 0,
+    investmentContributions: 0
   });
   const [loading, setLoading] = useState(true);
   const [historicalAverage, setHistoricalAverage] = useState<HistoricalAverage>({
     income: 0,
-    expenses: 0,
+    expenses: 0
   });
   const [categoryAverages, setCategoryAverages] = useState<CategoryAverage>({});
   const [currentExpenseData, setCurrentExpenseData] = useState<ExpenseData[]>([]);
-
   const loadDashboardData = async () => {
     if (!user) return;
-
     try {
       setLoading(true);
-      
       const referenceDate = new Date(referenceMonth);
-      const previousMonths = [
-        format(subMonths(referenceDate, 1), 'yyyy-MM-dd'),
-        format(subMonths(referenceDate, 2), 'yyyy-MM-dd'),
-        format(subMonths(referenceDate, 3), 'yyyy-MM-dd'),
-      ];
+      const previousMonths = [format(subMonths(referenceDate, 1), 'yyyy-MM-dd'), format(subMonths(referenceDate, 2), 'yyyy-MM-dd'), format(subMonths(referenceDate, 3), 'yyyy-MM-dd')];
 
       // Parallel queries for current month and historical data
-      const [
-        currentTransactionsResponse,
-        historicalTransactionsResponse,
-        investmentsResponse,
-        debtsResponse
-      ] = await Promise.all([
-        // Current month transactions with detailed category/subcategory info
-        supabase
-          .from('transactions')
-          .select(`
+      const [currentTransactionsResponse, historicalTransactionsResponse, investmentsResponse, debtsResponse] = await Promise.all([
+      // Current month transactions with detailed category/subcategory info
+      supabase.from('transactions').select(`
             amount,
             type,
             category_id,
@@ -100,14 +88,9 @@ const Index = () => {
               id,
               name
             )
-          `)
-          .eq('user_id', user.id)
-          .eq('reference_month', referenceMonth),
-        
-        // Historical transactions for averages
-        supabase
-          .from('transactions')
-          .select(`
+          `).eq('user_id', user.id).eq('reference_month', referenceMonth),
+      // Historical transactions for averages
+      supabase.from('transactions').select(`
             amount,
             type,
             category_id,
@@ -116,23 +99,11 @@ const Index = () => {
               id,
               name
             )
-          `)
-          .eq('user_id', user.id)
-          .in('reference_month', previousMonths),
-        
-        // Investments for net worth
-        supabase
-          .from('investments')
-          .select('current_balance')
-          .eq('user_id', user.id),
-        
-        // Debts for net worth
-        supabase
-          .from('debts')
-          .select('current_balance')
-          .eq('user_id', user.id)
-      ]);
-
+          `).eq('user_id', user.id).in('reference_month', previousMonths),
+      // Investments for net worth
+      supabase.from('investments').select('current_balance').eq('user_id', user.id),
+      // Debts for net worth
+      supabase.from('debts').select('current_balance').eq('user_id', user.id)]);
       if (currentTransactionsResponse.error) {
         console.error('Error fetching current transactions:', currentTransactionsResponse.error);
         toast({
@@ -142,62 +113,57 @@ const Index = () => {
         });
         return;
       }
-
       const currentTransactions = currentTransactionsResponse.data || [];
       const historicalTransactions = historicalTransactionsResponse.data || [];
 
       // Calculate current month totals
-      const income = currentTransactions
-        .filter(t => t.type === 'Income')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const expenses = currentTransactions
-        .filter(t => t.type === 'Expense')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const debtPayments = currentTransactions
-        .filter(t => t.type === 'Expense' && t.categories?.type === 'Debt')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
-
-      const investmentContributions = currentTransactions
-        .filter(t => t.type === 'Expense' && t.categories?.type === 'Investment')
-        .reduce((sum, t) => sum + Number(t.amount), 0);
+      const income = currentTransactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + Number(t.amount), 0);
+      const expenses = currentTransactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + Number(t.amount), 0);
+      const debtPayments = currentTransactions.filter(t => t.type === 'Expense' && t.categories?.type === 'Debt').reduce((sum, t) => sum + Number(t.amount), 0);
+      const investmentContributions = currentTransactions.filter(t => t.type === 'Expense' && t.categories?.type === 'Investment').reduce((sum, t) => sum + Number(t.amount), 0);
 
       // Calculate historical averages
-      const historicalByMonth = new Map<string, { income: number; expenses: number; categories: Map<number, number> }>();
-      
+      const historicalByMonth = new Map<string, {
+        income: number;
+        expenses: number;
+        categories: Map<number, number>;
+      }>();
       historicalTransactions.forEach(t => {
         const month = t.reference_month;
         if (!historicalByMonth.has(month)) {
-          historicalByMonth.set(month, { income: 0, expenses: 0, categories: new Map() });
+          historicalByMonth.set(month, {
+            income: 0,
+            expenses: 0,
+            categories: new Map()
+          });
         }
-        
         const monthData = historicalByMonth.get(month)!;
         const amount = Number(t.amount);
-        
         if (t.type === 'Income') {
           monthData.income += amount;
         } else if (t.type === 'Expense') {
           monthData.expenses += amount;
-          
           if (t.category_id) {
             const currentCategoryAmount = monthData.categories.get(t.category_id) || 0;
             monthData.categories.set(t.category_id, currentCategoryAmount + amount);
           }
         }
       });
-
       const monthsCount = historicalByMonth.size || 1;
       let totalHistoricalIncome = 0;
       let totalHistoricalExpenses = 0;
-      const categoryTotals = new Map<number, { name: string; total: number }>();
-
-      historicalByMonth.forEach((monthData) => {
+      const categoryTotals = new Map<number, {
+        name: string;
+        total: number;
+      }>();
+      historicalByMonth.forEach(monthData => {
         totalHistoricalIncome += monthData.income;
         totalHistoricalExpenses += monthData.expenses;
-        
         monthData.categories.forEach((amount, categoryId) => {
-          const existing = categoryTotals.get(categoryId) || { name: '', total: 0 };
+          const existing = categoryTotals.get(categoryId) || {
+            name: '',
+            total: 0
+          };
           categoryTotals.set(categoryId, {
             name: existing.name,
             total: existing.total + amount
@@ -212,10 +178,8 @@ const Index = () => {
           existing.name = t.categories.name;
         }
       });
-
       const avgIncome = totalHistoricalIncome / monthsCount;
       const avgExpenses = totalHistoricalExpenses / monthsCount;
-      
       const categoryAvgs: CategoryAverage = {};
       categoryTotals.forEach((data, categoryId) => {
         categoryAvgs[categoryId] = {
@@ -225,38 +189,32 @@ const Index = () => {
       });
 
       // Prepare expense data for chart
-      const expenseData: ExpenseData[] = currentTransactions
-        .filter(t => t.type === 'Expense' && t.categories)
-        .map(t => ({
-          categoryId: t.categories!.id,
-          categoryName: t.categories!.name,
-          subcategoryId: t.subcategory_id || undefined,
-          subcategoryName: t.subcategories?.name || undefined,
-          amount: Number(t.amount)
-        }));
+      const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories).map(t => ({
+        categoryId: t.categories!.id,
+        categoryName: t.categories!.name,
+        subcategoryId: t.subcategory_id || undefined,
+        subcategoryName: t.subcategories?.name || undefined,
+        amount: Number(t.amount)
+      }));
 
       // Calculate net worth
       const totalInvestments = investmentsResponse.data?.reduce((sum, inv) => sum + Number(inv.current_balance), 0) || 0;
       const totalDebts = debtsResponse.data?.reduce((sum, debt) => sum + Number(debt.current_balance), 0) || 0;
       const netWorth = totalInvestments - totalDebts;
-
       setDashboardData({
         income,
         expenses,
         balance: income - expenses,
         netWorth,
         debtPayments,
-        investmentContributions,
+        investmentContributions
       });
-
       setHistoricalAverage({
         income: avgIncome,
-        expenses: avgExpenses,
+        expenses: avgExpenses
       });
-
       setCategoryAverages(categoryAvgs);
       setCurrentExpenseData(expenseData);
-
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       toast({
@@ -268,31 +226,33 @@ const Index = () => {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     loadDashboardData();
   }, [referenceMonth, user]);
-
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
       currency: 'BRL'
     }).format(value);
   };
-
   const calculateVariation = (current: number, average: number) => {
-    if (average === 0) return { percentage: 0, isIncrease: false };
-    const percentage = ((current - average) / average) * 100;
-    return { percentage: Math.abs(percentage), isIncrease: current > average };
+    if (average === 0) return {
+      percentage: 0,
+      isIncrease: false
+    };
+    const percentage = (current - average) / average * 100;
+    return {
+      percentage: Math.abs(percentage),
+      isIncrease: current > average
+    };
   };
-
   const getMonthName = () => {
     const date = new Date(referenceMonth);
-    return format(date, 'MMMM \'de\' yyyy', { locale: ptBR });
+    return format(date, 'MMMM \'de\' yyyy', {
+      locale: ptBR
+    });
   };
-
-  return (
-    <div className="min-h-screen bg-background">
+  return <div className="min-h-screen bg-background">
       <Header />
       <main className="container mx-auto px-4 py-8 space-y-8">
         {/* Header Section */}
@@ -319,12 +279,7 @@ const Index = () => {
           <label htmlFor="month-filter" className="text-sm font-medium">
             Período de referência:
           </label>
-          <MonthYearPicker
-            value={referenceMonth}
-            onValueChange={setReferenceMonth}
-            placeholder="Selecione o mês"
-            className="w-full sm:w-auto"
-          />
+          <MonthYearPicker value={referenceMonth} onValueChange={setReferenceMonth} placeholder="Selecione o mês" className="w-full sm:w-auto" />
         </div>
 
         {/* Fluxo de Caixa Section */}
@@ -341,23 +296,19 @@ const Index = () => {
                 <div className="text-2xl font-bold text-green-600">
                   {loading ? '...' : formatCurrency(dashboardData.income)}
                 </div>
-                {!loading && historicalAverage.income > 0 && (
-                  <div className="flex items-center gap-1 mt-1">
+                {!loading && historicalAverage.income > 0 && <div className="flex items-center gap-1 mt-1">
                     {(() => {
-                      const variation = calculateVariation(dashboardData.income, historicalAverage.income);
-                      const Icon = variation.isIncrease ? ArrowUp : ArrowDown;
-                      const colorClass = variation.isIncrease ? 'text-green-600' : 'text-red-600';
-                      return (
-                        <>
+                  const variation = calculateVariation(dashboardData.income, historicalAverage.income);
+                  const Icon = variation.isIncrease ? ArrowUp : ArrowDown;
+                  const colorClass = variation.isIncrease ? 'text-green-600' : 'text-red-600';
+                  return <>
                           <Icon className={`h-3 w-3 ${colorClass}`} />
                           <p className={`text-xs ${colorClass}`}>
                             {variation.percentage.toFixed(0)}% vs. média dos 3 meses
                           </p>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                        </>;
+                })()}
+                  </div>}
               </CardContent>
             </Card>
 
@@ -371,23 +322,19 @@ const Index = () => {
                 <div className="text-2xl font-bold text-orange-600">
                   {loading ? '...' : formatCurrency(dashboardData.expenses)}
                 </div>
-                {!loading && historicalAverage.expenses > 0 && (
-                  <div className="flex items-center gap-1 mt-1">
+                {!loading && historicalAverage.expenses > 0 && <div className="flex items-center gap-1 mt-1">
                     {(() => {
-                      const variation = calculateVariation(dashboardData.expenses, historicalAverage.expenses);
-                      const Icon = variation.isIncrease ? ArrowUp : ArrowDown;
-                      const colorClass = variation.isIncrease ? 'text-red-600' : 'text-green-600';
-                      return (
-                        <>
+                  const variation = calculateVariation(dashboardData.expenses, historicalAverage.expenses);
+                  const Icon = variation.isIncrease ? ArrowUp : ArrowDown;
+                  const colorClass = variation.isIncrease ? 'text-red-600' : 'text-green-600';
+                  return <>
                           <Icon className={`h-3 w-3 ${colorClass}`} />
                           <p className={`text-xs ${colorClass}`}>
                             {variation.percentage.toFixed(0)}% vs. média dos 3 meses
                           </p>
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                        </>;
+                })()}
+                  </div>}
               </CardContent>
             </Card>
 
@@ -398,9 +345,7 @@ const Index = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${
-                  dashboardData.balance >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <div className={`text-2xl font-bold ${dashboardData.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {loading ? '...' : formatCurrency(dashboardData.balance)}
                 </div>
               </CardContent>
@@ -434,7 +379,7 @@ const Index = () => {
                 <p className="text-xs text-muted-foreground">Total investido no mês</p>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-purple-600">
+                <div className="text-2xl font-bold text-foreground ">
                   {loading ? '...' : formatCurrency(dashboardData.investmentContributions)}
                 </div>
               </CardContent>
@@ -447,9 +392,7 @@ const Index = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={`text-2xl font-bold ${
-                  dashboardData.netWorth >= 0 ? 'text-green-600' : 'text-red-600'
-                }`}>
+                <div className={`text-2xl font-bold ${dashboardData.netWorth >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                   {loading ? '...' : formatCurrency(dashboardData.netWorth)}
                 </div>
               </CardContent>
@@ -459,15 +402,9 @@ const Index = () => {
 
         {/* Charts Section */}
         <div className="w-full">
-          <GraficoDespesasInterativo 
-            loading={loading}
-            expenseData={currentExpenseData}
-            categoryAverages={categoryAverages}
-          />
+          <GraficoDespesasInterativo loading={loading} expenseData={currentExpenseData} categoryAverages={categoryAverages} />
         </div>
       </main>
-    </div>
-  );
+    </div>;
 };
-
 export default Index;
