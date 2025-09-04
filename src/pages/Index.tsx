@@ -253,7 +253,7 @@ const Index = () => {
     });
   };
   return <div className="min-h-screen bg-background">
-      <Header className="text-2xl font-bold text-foreground" />
+      <Header />
       <main className="text-2xl font-bold text-foreground ">
         {/* Header Section */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
