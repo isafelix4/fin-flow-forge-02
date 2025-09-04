@@ -247,9 +247,10 @@ const Index = () => {
     };
   };
   const getMonthName = () => {
-    const date = new Date(referenceMonth);
-    return format(date, 'MMMM \'de\' yyyy', {
-      locale: ptBR
+    const date = new Date(referenceMonth + 'T12:00:00');
+    return date.toLocaleDateString('pt-BR', { 
+      month: 'long', 
+      year: 'numeric' 
     });
   };
   return <div className="min-h-screen bg-background">
