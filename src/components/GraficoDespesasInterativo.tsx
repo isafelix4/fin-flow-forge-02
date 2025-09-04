@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, LabelList, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
@@ -149,16 +148,6 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
   const isEmpty = currentData.length === 0;
   const isLoading = loading;
 
-  // Calculate dynamic width based on number of items
-  const getChartWidth = () => {
-    const itemCount = currentData.length;
-    const minBarWidth = 80; // Minimum width per bar
-    const calculatedWidth = Math.max(itemCount * minBarWidth, 100); // Ensure minimum width
-    return `${calculatedWidth}%`;
-  };
-
-  const shouldScroll = currentData.length > 6; // Enable scroll when more than 6 items
-
   return (
     <Card className="w-full">
       <CardHeader>
@@ -197,164 +186,80 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
             </p>
           </div>
         ) : (
-          <div className="w-full">
-            {shouldScroll ? (
-              <ScrollArea className="w-full">
-                <div className="min-w-full" style={{ width: getChartWidth() }}>
-                  <ChartContainer config={chartConfig} className="h-80 w-full">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={currentData} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
-                        <XAxis 
-                          dataKey="name" 
-                          tick={{ fontSize: 12 }}
-                          angle={-45}
-                          textAnchor="end"
-                          height={100}
-                          interval={0}
-                        />
-                        <YAxis 
-                          tick={{ fontSize: 12 }}
-                          tickFormatter={(value) => formatCurrency(value)}
-                        />
-                        <ChartTooltip 
-                          content={({ active, payload, label }) => {
-                            if (active && payload && payload.length) {
-                              const data = payload[0].payload;
-                              const value = payload[0].value as number;
+          <ChartContainer config={chartConfig} className="h-80 w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={currentData} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
+                <XAxis 
+                  dataKey="name" 
+                  tick={{ fontSize: 12 }}
+                  angle={-45}
+                  textAnchor="end"
+                  height={100}
+                  interval={0}
+                />
+                <YAxis 
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value) => formatCurrency(value)}
+                />
+                <ChartTooltip 
+                  content={({ active, payload, label }) => {
+                    if (active && payload && payload.length) {
+                      const data = payload[0].payload;
+                      const value = payload[0].value as number;
 
-                              return (
-                                <div className="bg-background border border-border rounded-lg p-3 shadow-lg text-sm">
-                                  <p className="font-bold mb-1">{label}</p>
-                                  <p className="text-primary">Valor do Mês: {formatCurrency(value)}</p>
-                                  {viewMode === 'categories' && data.average > 0 && (
-                                    <>
-                                      <p className="text-xs text-muted-foreground">Média (3m): {formatCurrency(data.average)}</p>
-                                      <p className={`text-xs font-semibold ${value > data.average ? 'text-red-500' : 'text-green-500'}`}>
-                                        Variação: {(() => {
-                                          const variation = calculateVariation(value, data.average);
-                                          return `${variation.isIncrease ? '+' : '-'}${variation.percentage.toFixed(1)}%`;
-                                        })()}
-                                      </p>
-                                    </>
-                                  )}
-                                </div>
-                              );
-                            }
-                            return null;
-                          }}
-                        />
-                        <Bar 
-                          dataKey="amount" 
-                          fill="var(--color-amount)"
-                          radius={[4, 4, 0, 0]}
-                          className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
-                          onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
-                        >
-                          {viewMode === 'categories' && currentData.map((entry, index) => (
-                            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                          ))}
-                          <LabelList 
-                            dataKey="amount" 
-                            position="top" 
-                            fill="hsl(var(--foreground))"
-                            formatter={(value: number) => formatCurrency(value)}
-                            fontSize={12}
-                          />
-                        </Bar>
-                        {viewMode === 'categories' && categoryData.map((cat) => (
-                          cat.average > 0 && (
-                            <ReferenceLine
-                              key={`avg-${cat.id}`}
-                              y={cat.average}
-                              stroke="hsl(var(--muted-foreground))"
-                              strokeDasharray="3 3"
-                              strokeWidth={1}
-                            />
-                          )
-                        ))}
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </ChartContainer>
-                </div>
-                <ScrollBar orientation="horizontal" />
-              </ScrollArea>
-            ) : (
-              <ChartContainer config={chartConfig} className="h-80 w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={currentData} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
-                    <XAxis 
-                      dataKey="name" 
-                      tick={{ fontSize: 12 }}
-                      angle={-45}
-                      textAnchor="end"
-                      height={100}
-                      interval={0}
+                      return (
+                        <div className="bg-background border border-border rounded-lg p-3 shadow-lg text-sm">
+                          <p className="font-bold mb-1">{label}</p>
+                          <p className="text-primary">Valor do Mês: {formatCurrency(value)}</p>
+                          {viewMode === 'categories' && data.average > 0 && (
+                            <>
+                              <p className="text-xs text-muted-foreground">Média (3m): {formatCurrency(data.average)}</p>
+                              <p className={`text-xs font-semibold ${value > data.average ? 'text-red-500' : 'text-green-500'}`}>
+                                Variação: {(() => {
+                                  const variation = calculateVariation(value, data.average);
+                                  return `${variation.isIncrease ? '+' : '-'}${variation.percentage.toFixed(1)}%`;
+                                })()}
+                              </p>
+                            </>
+                          )}
+                        </div>
+                      );
+                    }
+                    return null;
+                  }}
+                />
+                <Bar 
+                  dataKey="amount" 
+                  fill="var(--color-amount)"
+                  radius={[4, 4, 0, 0]}
+                  className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
+                  onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
+                >
+                  {viewMode === 'categories' && currentData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                  <LabelList 
+                    dataKey="amount" 
+                    position="top" 
+                    fill="hsl(var(--foreground))"
+                    formatter={(value: number) => formatCurrency(value)}
+                    fontSize={12}
+                  />
+                </Bar>
+                {viewMode === 'categories' && categoryData.map((cat) => (
+                  cat.average > 0 && (
+                    <ReferenceLine
+                      key={`avg-${cat.id}`}
+                      y={cat.average}
+                      stroke="hsl(var(--muted-foreground))"
+                      strokeDasharray="3 3"
+                      strokeWidth={1}
                     />
-                    <YAxis 
-                      tick={{ fontSize: 12 }}
-                      tickFormatter={(value) => formatCurrency(value)}
-                    />
-                    <ChartTooltip 
-                      content={({ active, payload, label }) => {
-                        if (active && payload && payload.length) {
-                          const data = payload[0].payload;
-                          const value = payload[0].value as number;
-
-                          return (
-                            <div className="bg-background border border-border rounded-lg p-3 shadow-lg text-sm">
-                              <p className="font-bold mb-1">{label}</p>
-                              <p className="text-primary">Valor do Mês: {formatCurrency(value)}</p>
-                              {viewMode === 'categories' && data.average > 0 && (
-                                <>
-                                  <p className="text-xs text-muted-foreground">Média (3m): {formatCurrency(data.average)}</p>
-                                  <p className={`text-xs font-semibold ${value > data.average ? 'text-red-500' : 'text-green-500'}`}>
-                                    Variação: {(() => {
-                                      const variation = calculateVariation(value, data.average);
-                                      return `${variation.isIncrease ? '+' : '-'}${variation.percentage.toFixed(1)}%`;
-                                    })()}
-                                  </p>
-                                </>
-                              )}
-                            </div>
-                          );
-                        }
-                        return null;
-                      }}
-                    />
-                    <Bar 
-                      dataKey="amount" 
-                      fill="var(--color-amount)"
-                      radius={[4, 4, 0, 0]}
-                      className={viewMode === 'categories' ? 'cursor-pointer hover:opacity-80' : ''}
-                      onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
-                    >
-                      {viewMode === 'categories' && currentData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                      ))}
-                      <LabelList 
-                        dataKey="amount" 
-                        position="top" 
-                        fill="hsl(var(--foreground))"
-                        formatter={(value: number) => formatCurrency(value)}
-                        fontSize={12}
-                      />
-                    </Bar>
-                    {viewMode === 'categories' && categoryData.map((cat) => (
-                      cat.average > 0 && (
-                        <ReferenceLine
-                          key={`avg-${cat.id}`}
-                          y={cat.average}
-                          stroke="hsl(var(--muted-foreground))"
-                          strokeDasharray="3 3"
-                          strokeWidth={1}
-                        />
-                      )
-                    ))}
-                  </BarChart>
-                </ResponsiveContainer>
-              </ChartContainer>
-            )}
-          </div>
+                  )
+                ))}
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartContainer>
         )}
       </CardContent>
     </Card>
