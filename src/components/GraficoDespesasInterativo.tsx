@@ -186,7 +186,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
             </p>
           </div>
         ) : (
-          <ChartContainer config={chartConfig} className="h-80 w-full">
+          <ChartContainer config={chartConfig} className="min-h-[400px] h-full w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={currentData} margin={{ top: 20, right: 30, left: 20, bottom: 100 }}>
                 <XAxis 
