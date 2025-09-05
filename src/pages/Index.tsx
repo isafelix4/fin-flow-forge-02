@@ -34,6 +34,7 @@ interface CategoryAverage {
 interface ExpenseData {
   categoryId: number;
   categoryName: string;
+  categoryType: 'Standard' | 'Debt' | 'Investment';
   subcategoryId?: number;
   subcategoryName?: string;
   amount: number;
@@ -192,6 +193,7 @@ const Index = () => {
       const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories).map(t => ({
         categoryId: t.categories!.id,
         categoryName: t.categories!.name,
+        categoryType: t.categories!.type as 'Standard' | 'Debt' | 'Investment',
         subcategoryId: t.subcategory_id || undefined,
         subcategoryName: t.subcategories?.name || undefined,
         amount: Number(t.amount)

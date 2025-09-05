@@ -9,6 +9,7 @@ interface CategoryData {
   id: number;
   name: string;
   amount: number;
+  type: 'Standard' | 'Debt' | 'Investment';
   average?: number;
 }
 
@@ -20,6 +21,7 @@ interface SubcategoryData {
 interface ExpenseData {
   categoryId: number;
   categoryName: string;
+  categoryType: 'Standard' | 'Debt' | 'Investment';
   subcategoryId?: number;
   subcategoryName?: string;
   amount: number;
@@ -58,7 +60,12 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
     },
   };
 
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8442ff', '#ff42b3', '#42a5f5', '#66bb6a', '#ffa726', '#ab47bc'];
+  // High contrast colors for Standard categories (avoiding red/green tones)
+  const STANDARD_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0891b2', '#4338ca', '#be185d', '#c2410c', '#0e7490', '#6366f1'];
+  
+  // Reserved colors for special category types
+  const DEBT_COLOR = '#dc2626'; // Red
+  const INVESTMENT_COLOR = '#16a34a'; // Green
 
   const calculateVariation = (current: number, average: number) => {
     if (average === 0) return { percentage: 0, isIncrease: false };
@@ -70,16 +77,18 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
     if (!expenseData) return;
 
     // Group by category
-    const categoryMap = new Map<number, { name: string, amount: number }>();
+    const categoryMap = new Map<number, { name: string, amount: number, type: 'Standard' | 'Debt' | 'Investment' }>();
     
     expenseData.forEach(expense => {
       const currentData = categoryMap.get(expense.categoryId) || { 
         name: expense.categoryName, 
-        amount: 0 
+        amount: 0,
+        type: expense.categoryType
       };
       categoryMap.set(expense.categoryId, {
         name: expense.categoryName,
-        amount: currentData.amount + expense.amount
+        amount: currentData.amount + expense.amount,
+        type: expense.categoryType
       });
     });
 
@@ -88,6 +97,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
         id,
         name: data.name,
         amount: data.amount,
+        type: data.type,
         average: categoryAverages[id]?.average || 0
       }))
       .sort((a, b) => b.amount - a.amount);
@@ -119,8 +129,10 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
     setSubcategoryData(subcategories);
   };
 
-  const getCategoryColor = (categoryId: number) => {
-    return COLORS[categoryId % COLORS.length];
+  const getCategoryColor = (categoryId: number, categoryType?: 'Standard' | 'Debt' | 'Investment') => {
+    if (categoryType === 'Debt') return DEBT_COLOR;
+    if (categoryType === 'Investment') return INVESTMENT_COLOR;
+    return STANDARD_COLORS[categoryId % STANDARD_COLORS.length];
   };
 
   const handleCategoryClick = (data: any) => {
@@ -240,10 +252,10 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                   onClick={viewMode === 'categories' ? handleCategoryClick : undefined}
                 >
                   {viewMode === 'categories' && categoryData.map((entry) => (
-                    <Cell key={`cell-${entry.id}`} fill={getCategoryColor(entry.id)} />
+                    <Cell key={`cell-${entry.id}`} fill={getCategoryColor(entry.id, entry.type)} />
                   ))}
                   {viewMode === 'subcategories' && subcategoryData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={selectedCategory ? getCategoryColor(selectedCategory.id) : COLORS[0]} />
+                    <Cell key={`cell-${index}`} fill={selectedCategory ? getCategoryColor(selectedCategory.id, selectedCategory.type) : STANDARD_COLORS[0]} />
                   ))}
                   <LabelList 
                     dataKey="amount" 
