@@ -6,6 +6,8 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ReferenceMonthProvider } from "@/contexts/ReferenceMonthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { SecurityProvider } from "@/components/SecurityProvider";
+import { useSecurityHeaders } from "@/hooks/useSecurityHeaders";
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Cadastro from "./pages/Cadastro";
@@ -20,14 +22,18 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
-const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
-        <AuthProvider>
-          <ReferenceMonthProvider>
+const App = () => {
+  useSecurityHeaders();
+  
+  return (
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
+          <AuthProvider>
+            <SecurityProvider>
+              <ReferenceMonthProvider>
             <Routes>
             <Route path="/login" element={<Login />} />
             <Route path="/cadastro" element={<Cadastro />} />
@@ -98,11 +104,13 @@ const App = () => (
             {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
             <Route path="*" element={<NotFound />} />
             </Routes>
-          </ReferenceMonthProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
-);
+              </ReferenceMonthProvider>
+            </SecurityProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </TooltipProvider>
+    </QueryClientProvider>
+  );
+};
 
 export default App;
