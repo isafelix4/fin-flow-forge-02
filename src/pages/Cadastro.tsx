@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { useSecurityValidation } from '@/hooks/useSecurityValidation';
+import { CheckCircle, XCircle, Shield } from 'lucide-react';
 
 const Cadastro = () => {
   const [formData, setFormData] = useState({
@@ -15,18 +17,27 @@ const Cadastro = () => {
     confirmarSenha: '',
   });
   const [loading, setLoading] = useState(false);
+  const [passwordValidation, setPasswordValidation] = useState<any>(null);
   const navigate = useNavigate();
+  const { validatePassword, validateEmail, sanitizeInput, logSecurityEvent, checkRateLimit, recordFailedAttempt } = useSecurityValidation();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    const sanitizedValue = name === 'nome' ? sanitizeInput(value, 100) : value;
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value,
+      [name]: sanitizedValue,
     });
+
+    // Real-time password validation
+    if (name === 'senha') {
+      const validation = validatePassword(value);
+      setPasswordValidation(validation);
+    }
   };
 
   const validateForm = () => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    
     if (!formData.nome.trim()) {
       toast({
         title: "Erro de validação",
@@ -36,19 +47,21 @@ const Cadastro = () => {
       return false;
     }
     
-    if (!emailRegex.test(formData.email)) {
+    const emailValidation = validateEmail(formData.email);
+    if (!emailValidation.isValid) {
       toast({
         title: "Erro de validação",
-        description: "Digite um e-mail válido",
+        description: emailValidation.error || "Digite um e-mail válido",
         variant: "destructive",
       });
       return false;
     }
     
-    if (formData.senha.length < 6) {
+    const passwordValidation = validatePassword(formData.senha);
+    if (!passwordValidation.isValid) {
       toast({
         title: "Erro de validação",
-        description: "A senha deve ter pelo menos 6 caracteres",
+        description: passwordValidation.errors.join(', '),
         variant: "destructive",
       });
       return false;
@@ -69,6 +82,7 @@ const Cadastro = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    if (!checkRateLimit()) return;
     if (!validateForm()) return;
     
     setLoading(true);
@@ -86,6 +100,12 @@ const Cadastro = () => {
       });
 
       if (error) {
+        recordFailedAttempt();
+        await logSecurityEvent('signup_failed', { 
+          error: error.message,
+          email: formData.email 
+        });
+
         if (error.message.includes('User already registered')) {
           toast({
             title: "Erro no cadastro",
@@ -103,12 +123,21 @@ const Cadastro = () => {
       }
 
       if (data.user && !data.session) {
+        await logSecurityEvent('signup_success', { 
+          user_id: data.user.id,
+          email: data.user.email 
+        });
+        
         toast({
           title: "Cadastro realizado!",
           description: "Verifique seu e-mail para confirmar o cadastro antes de fazer login.",
         });
         navigate('/login');
       } else if (data.session) {
+        await logSecurityEvent('signup_auto_login', { 
+          user_id: data.user?.id,
+          email: data.user?.email 
+        });
         navigate('/');
       }
     } catch (error) {
@@ -170,6 +199,32 @@ const Cadastro = () => {
                 onChange={handleChange}
                 required
               />
+              {passwordValidation && (
+                <div className="space-y-2 text-sm">
+                  <div className="flex items-center gap-2">
+                    <Shield size={16} />
+                    <span className={`font-medium ${
+                      passwordValidation.strength === 'strong' ? 'text-green-600' :
+                      passwordValidation.strength === 'medium' ? 'text-yellow-600' : 'text-red-600'
+                    }`}>
+                      Força: {passwordValidation.strength === 'strong' ? 'Forte' :
+                               passwordValidation.strength === 'medium' ? 'Média' : 'Fraca'}
+                    </span>
+                  </div>
+                  {passwordValidation.errors.map((error: string, index: number) => (
+                    <div key={index} className="flex items-center gap-2 text-red-600">
+                      <XCircle size={12} />
+                      <span>{error}</span>
+                    </div>
+                  ))}
+                  {passwordValidation.isValid && (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <CheckCircle size={12} />
+                      <span>Senha segura!</span>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
             
             <div className="space-y-2">

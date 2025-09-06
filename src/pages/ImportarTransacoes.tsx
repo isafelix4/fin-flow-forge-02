@@ -8,11 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Upload, AlertCircle, CheckCircle, ArrowRight, Trash2 } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle, ArrowRight, Trash2, Shield } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 import { Database } from '@/integrations/supabase/types';
 import { MonthYearPicker } from '@/components/ui/month-year-picker';
+import { useSecurityValidation } from '@/hooks/useSecurityValidation';
 
 interface Account {
   id: number;
@@ -64,6 +65,7 @@ interface ParsedTransaction {
 export default function ImportarTransacoes() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { sanitizeInput, logSecurityEvent } = useSecurityValidation();
   
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -138,7 +140,10 @@ export default function ImportarTransacoes() {
   };
 
   const parseCSV = (csvText: string): ParsedTransaction[] => {
-    const lines = csvText.split('\n').filter(line => line.trim());
+    // Sanitize CSV content
+    const sanitizedCSV = sanitizeInput(csvText, 100000); // 100KB max
+    
+    const lines = sanitizedCSV.split('\n').filter(line => line.trim());
     const transactions: ParsedTransaction[] = [];
 
     // Auto-detect delimiter by analyzing the first few lines
@@ -280,7 +285,7 @@ Verifique o formato do arquivo.`);
 
       transactions.push({
         date: date.toISOString().split('T')[0],
-        description: description.trim(),
+        description: sanitizeInput(description.trim(), 200), // Sanitize and limit description
         amount: Math.abs(amount),
         type: amount < 0 ? 'Expense' : 'Income',
         id: `temp-${Date.now()}-${i}` // Temporary ID for tracking
@@ -344,6 +349,7 @@ Verifique o formato do arquivo.`);
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
+      // Enhanced file validation
       if (file.type !== 'text/csv' && !file.name.endsWith('.csv')) {
         toast({
           title: "Erro",
@@ -352,6 +358,25 @@ Verifique o formato do arquivo.`);
         });
         return;
       }
+
+      // Check file size (max 5MB)
+      const maxSize = 5 * 1024 * 1024; // 5MB
+      if (file.size > maxSize) {
+        toast({
+          title: "Erro",
+          description: "O arquivo é muito grande. Tamanho máximo permitido: 5MB",
+          variant: "destructive"
+        });
+        return;
+      }
+
+      // Log file upload attempt
+      logSecurityEvent('csv_upload_attempt', {
+        filename: sanitizeInput(file.name),
+        filesize: file.size,
+        filetype: file.type
+      });
+
       setSelectedFile(file);
     }
   };
@@ -379,6 +404,13 @@ Verifique o formato do arquivo.`);
         return;
       }
 
+      // Log successful CSV parsing
+      await logSecurityEvent('csv_parsed_success', {
+        filename: sanitizeInput(selectedFile.name),
+        transactions_count: parsed.length,
+        account_id: formData.account_id
+      });
+
       setParsedTransactions(parsed);
       // Initialize categories for each transaction
       const initCategories = parsed.map(() => ({
@@ -395,6 +427,13 @@ Verifique o formato do arquivo.`);
       setStep('categorize');
     } catch (error: any) {
       console.error('Error processing file:', error);
+      
+      // Log CSV parsing error
+      await logSecurityEvent('csv_parsing_error', {
+        filename: sanitizeInput(selectedFile.name),
+        error: error.message
+      });
+      
       toast({
         title: "Erro",
         description: error.message || "Erro ao processar arquivo CSV",
@@ -455,6 +494,9 @@ Verifique o formato do arquivo.`);
     const newTransactions = [...parsedTransactions];
     if (field === 'amount') {
       newTransactions[index] = { ...newTransactions[index], [field]: parseFloat(value as string) };
+    } else if (field === 'description') {
+      // Sanitize edited description
+      newTransactions[index] = { ...newTransactions[index], [field]: sanitizeInput(value as string, 200) };
     } else {
       newTransactions[index] = { ...newTransactions[index], [field]: value };
     }

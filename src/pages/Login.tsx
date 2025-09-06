@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { useSecurityValidation } from '@/hooks/useSecurityValidation';
 
 const Login = () => {
   const [formData, setFormData] = useState({
@@ -14,6 +15,7 @@ const Login = () => {
   });
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const { validateEmail, logSecurityEvent, checkRateLimit, recordFailedAttempt, resetRateLimit } = useSecurityValidation();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setFormData({
@@ -24,6 +26,20 @@ const Login = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!checkRateLimit()) return;
+    
+    // Validate email format
+    const emailValidation = validateEmail(formData.email);
+    if (!emailValidation.isValid) {
+      toast({
+        title: "Erro de validação",
+        description: emailValidation.error || "Digite um e-mail válido",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setLoading(true);
 
     try {
@@ -33,6 +49,13 @@ const Login = () => {
       });
 
       if (error) {
+        recordFailedAttempt();
+        await logSecurityEvent('login_failed', { 
+          error: error.message,
+          email: formData.email,
+          timestamp: new Date().toISOString()
+        });
+
         if (error.message.includes('Email not confirmed')) {
           toast({
             title: "Cadastro não confirmado por e-mail",
@@ -56,6 +79,12 @@ const Login = () => {
       }
 
       if (data.session) {
+        resetRateLimit();
+        await logSecurityEvent('login_success', { 
+          user_id: data.user?.id,
+          email: data.user?.email,
+          timestamp: new Date().toISOString()
+        });
         navigate('/');
       }
     } catch (error) {
