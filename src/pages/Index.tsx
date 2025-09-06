@@ -24,10 +24,8 @@ interface DashboardData {
 interface HistoricalAverage {
   income: number;
   expenses: number;
-  balance: number;
   debtPayments: number;
   investmentContributions: number;
-  netWorth: number;
 }
 interface CategoryAverage {
   [categoryId: number]: {
@@ -66,10 +64,8 @@ const Index = () => {
   const [historicalAverage, setHistoricalAverage] = useState<HistoricalAverage>({
     income: 0,
     expenses: 0,
-    balance: 0,
     debtPayments: 0,
-    investmentContributions: 0,
-    netWorth: 0
+    investmentContributions: 0
   });
   const [categoryAverages, setCategoryAverages] = useState<CategoryAverage>({});
   const [currentExpenseData, setCurrentExpenseData] = useState<ExpenseData[]>([]);
@@ -208,14 +204,8 @@ const Index = () => {
       });
       const avgIncome = totalHistoricalIncome / monthsCount;
       const avgExpenses = totalHistoricalExpenses / monthsCount;
-      const avgBalance = avgIncome - avgExpenses;
       const avgDebtPayments = totalHistoricalDebtPayments / monthsCount;
       const avgInvestmentContributions = totalHistoricalInvestmentContributions / monthsCount;
-      
-      // Calculate historical net worth (approximation using current values)
-      const totalHistoricalInvestments = historicalInvestmentsResponse.data?.reduce((sum, inv) => sum + Number(inv.current_balance), 0) || 0;
-      const totalHistoricalDebts = historicalDebtsResponse.data?.reduce((sum, debt) => sum + Number(debt.current_balance), 0) || 0;
-      const avgNetWorth = totalHistoricalInvestments - totalHistoricalDebts;
       
       const categoryAvgs: CategoryAverage = {};
       categoryTotals.forEach((data, categoryId) => {
@@ -250,10 +240,8 @@ const Index = () => {
       setHistoricalAverage({
         income: avgIncome,
         expenses: avgExpenses,
-        balance: avgBalance,
         debtPayments: avgDebtPayments,
-        investmentContributions: avgInvestmentContributions,
-        netWorth: avgNetWorth
+        investmentContributions: avgInvestmentContributions
       });
       setCategoryAverages(categoryAvgs);
       setCurrentExpenseData(expenseData);
@@ -398,7 +386,6 @@ const Index = () => {
                 <div className="text-2xl font-bold text-foreground">
                   {loading ? '...' : formatCurrency(dashboardData.balance)}
                 </div>
-                {!loading && renderVariationIndicator(dashboardData.balance, historicalAverage.balance, true)}
               </CardContent>
             </Card>
           </div>
@@ -448,7 +435,6 @@ const Index = () => {
                 <div className="text-2xl font-bold text-foreground">
                   {loading ? '...' : formatCurrency(dashboardData.netWorth)}
                 </div>
-                {!loading && renderVariationIndicator(dashboardData.netWorth, historicalAverage.netWorth, true)}
               </CardContent>
             </Card>
           </div>
