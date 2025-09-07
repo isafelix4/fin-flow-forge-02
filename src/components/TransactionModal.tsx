@@ -146,7 +146,7 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
         supabase.from('accounts').select('*').eq('user_id', user?.id),
         supabase.from('categories').select('*').eq('user_id', user?.id),
         supabase.from('investments').select('id, name').eq('user_id', user?.id),
-        supabase.from('debts').select('id, description').eq('user_id', user?.id)
+        supabase.from('debts').select('id, description').eq('user_id', user?.id).gt('current_balance', 0)
       ]);
 
       if (accountsRes.error) throw accountsRes.error;

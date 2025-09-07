@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { Edit, Trash2, Plus, TrendingDown, CreditCard, DollarSign, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
@@ -42,6 +43,7 @@ function Dividas() {
   const { toast } = useToast();
   const { referenceMonth } = useReferenceMonth();
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [paidOffDebts, setPaidOffDebts] = useState<Debt[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
@@ -75,18 +77,14 @@ function Dividas() {
 
   const fetchDebts = async () => {
     try {
-      let query = supabase
-        .from('debts')
-        .select('*')
-        .eq('user_id', user?.id);
-
       // Handle special sorting for progress and taxa_juros_mensal
       if (sortBy === 'progress') {
         // Sort by progress percentage (calculated as (original - current) / original)
         const { data: unsortedData, error } = await supabase
           .from('debts')
           .select('*')
-          .eq('user_id', user?.id);
+          .eq('user_id', user?.id)
+          .gt('current_balance', 0);
 
         if (error) throw error;
         
@@ -99,17 +97,35 @@ function Dividas() {
         setDebts(sortedData);
         setLoading(false);
         return;
-      } else if (sortBy === 'taxa_juros_mensal') {
-        // Sort with NULLS LAST for ascending or NULLS FIRST for descending
-        query = query.order('taxa_juros_mensal', { ascending: sortOrder === 'asc', nullsFirst: sortOrder === 'desc' });
-      } else {
-        query = query.order(sortBy, { ascending: sortOrder === 'asc' });
       }
 
-      const { data, error } = await query;
+      // Fetch active debts
+      let activeQuery = supabase
+        .from('debts')
+        .select('*')
+        .eq('user_id', user?.id)
+        .gt('current_balance', 0);
 
-      if (error) throw error;
-      setDebts(data || []);
+      if (sortBy === 'taxa_juros_mensal') {
+        activeQuery = activeQuery.order('taxa_juros_mensal', { ascending: sortOrder === 'asc', nullsFirst: sortOrder === 'desc' });
+      } else {
+        activeQuery = activeQuery.order(sortBy, { ascending: sortOrder === 'asc' });
+      }
+
+      // Fetch paid off debts
+      const paidOffQuery = supabase
+        .from('debts')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('current_balance', 0);
+
+      const [activeResult, paidOffResult] = await Promise.all([activeQuery, paidOffQuery]);
+
+      if (activeResult.error) throw activeResult.error;
+      if (paidOffResult.error) throw paidOffResult.error;
+
+      setDebts(activeResult.data || []);
+      setPaidOffDebts(paidOffResult.data || []);
     } catch (error) {
       console.error('Error fetching debts:', error);
       toast({
@@ -263,11 +279,12 @@ function Dividas() {
     }
   };
 
-  const totalOriginalAmount = debts.reduce((sum, debt) => sum + debt.original_amount, 0);
-  const totalCurrentBalance = debts.reduce((sum, debt) => sum + debt.current_balance, 0);
+  const totalOriginalAmount = [...debts, ...paidOffDebts].reduce((sum, debt) => sum + debt.original_amount, 0);
+  const totalCurrentBalance = [...debts, ...paidOffDebts].reduce((sum, debt) => sum + debt.current_balance, 0);
 
   const calculateWeightedAverageInterestRate = () => {
-    const debtsWithInterest = debts.filter(debt => debt.taxa_juros_mensal !== null);
+    const allDebts = [...debts, ...paidOffDebts];
+    const debtsWithInterest = allDebts.filter(debt => debt.taxa_juros_mensal !== null);
     if (debtsWithInterest.length === 0) return 0;
     
     const totalWeightedRate = debtsWithInterest.reduce((sum, debt) => {
@@ -634,6 +651,94 @@ function Dividas() {
             )}
           </CardContent>
         </Card>
+
+        {/* Dívidas Quitadas */}
+        <Accordion type="single" collapsible className="mt-6">
+          <AccordionItem value="paid-off-debts" disabled={paidOffDebts.length === 0}>
+            <AccordionTrigger className="hover:no-underline">
+              <span className="text-lg font-semibold">
+                Dívidas Quitadas ({paidOffDebts.length})
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-6">
+                  {paidOffDebts.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Descrição da Dívida</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Valor Original</TableHead>
+                          <TableHead>Taxa de Juros</TableHead>
+                          <TableHead>Total de Parcelas</TableHead>
+                          <TableHead>Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {paidOffDebts.map((debt) => (
+                          <TableRow key={debt.id}>
+                            <TableCell className="font-medium">{debt.description}</TableCell>
+                            <TableCell>{getTypeLabel(debt.type)}</TableCell>
+                            <TableCell>
+                              R$ {debt.original_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell>
+                              {debt.taxa_juros_mensal 
+                                ? `${debt.taxa_juros_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`
+                                : 'N/A'
+                              }
+                            </TableCell>
+                            <TableCell>
+                              {debt.total_installments || 'N/A'}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEdit(debt)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja excluir a dívida "{debt.description}"?
+                                        Esta ação não pode ser desfeita.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDelete(debt.id)}>
+                                        Excluir
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhuma dívida quitada encontrada.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </div>
   );
