@@ -145,8 +145,8 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       const [accountsRes, categoriesRes, investmentsRes, debtsRes] = await Promise.all([
         supabase.from('accounts').select('*').eq('user_id', user?.id),
         supabase.from('categories').select('*').eq('user_id', user?.id),
-        supabase.from('investments').select('id, name').eq('user_id', user?.id),
-        supabase.from('debts').select('id, description').eq('user_id', user?.id).gt('current_balance', 0)
+        supabase.from('investments').select('id, name').eq('user_id', user?.id).order('name', { ascending: true }),
+        supabase.from('debts').select('id, description').eq('user_id', user?.id).gt('current_balance', 0).order('description', { ascending: true })
       ]);
 
       if (accountsRes.error) throw accountsRes.error;
