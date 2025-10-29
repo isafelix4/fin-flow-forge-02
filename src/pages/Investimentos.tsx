@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
 import { Edit, Trash2, Plus, TrendingUp, Wallet, DollarSign, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -42,6 +43,7 @@ function Investimentos() {
   const { toast } = useToast();
   const { referenceMonth } = useReferenceMonth();
   const [investments, setInvestments] = useState<Investment[]>([]);
+  const [closedInvestments, setClosedInvestments] = useState<Investment[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInvestment, setEditingInvestment] = useState<Investment | null>(null);
@@ -73,26 +75,38 @@ function Investimentos() {
 
   const fetchInvestments = async () => {
     try {
-      let query = supabase
+      // Fetch active investments (current_balance > 0)
+      let activeQuery = supabase
         .from('investments')
         .select('*')
-        .eq('user_id', user?.id);
+        .eq('user_id', user?.id)
+        .gt('current_balance', 0);
 
       // Handle sorting with NULL values for rentabilidade
       if (sortBy === 'rentabilidade') {
         if (sortOrder === 'asc') {
-          query = query.order('rentabilidade', { ascending: true, nullsFirst: false });
+          activeQuery = activeQuery.order('rentabilidade', { ascending: true, nullsFirst: false });
         } else {
-          query = query.order('rentabilidade', { ascending: false, nullsFirst: false });
+          activeQuery = activeQuery.order('rentabilidade', { ascending: false, nullsFirst: false });
         }
       } else {
-        query = query.order(sortBy, { ascending: sortOrder === 'asc' });
+        activeQuery = activeQuery.order(sortBy, { ascending: sortOrder === 'asc' });
       }
 
-      const { data, error } = await query;
+      // Fetch closed investments (current_balance = 0)
+      const closedQuery = supabase
+        .from('investments')
+        .select('*')
+        .eq('user_id', user?.id)
+        .eq('current_balance', 0);
 
-      if (error) throw error;
-      setInvestments(data || []);
+      const [activeResult, closedResult] = await Promise.all([activeQuery, closedQuery]);
+
+      if (activeResult.error) throw activeResult.error;
+      if (closedResult.error) throw closedResult.error;
+
+      setInvestments(activeResult.data || []);
+      setClosedInvestments(closedResult.data || []);
     } catch (error) {
       console.error('Error fetching investments:', error);
       toast({
@@ -236,8 +250,8 @@ function Investimentos() {
     }
   };
 
-  const totalCurrentBalance = investments.reduce((sum, inv) => sum + inv.current_balance, 0);
-  const activeInvestments = investments.filter(inv => inv.current_balance > 0).length;
+  const totalCurrentBalance = [...investments, ...closedInvestments].reduce((sum, inv) => sum + inv.current_balance, 0);
+  const activeInvestments = investments.length;
   
   // Calculate weighted average profitability
   const calculateAverageProfitability = () => {
@@ -277,7 +291,8 @@ function Investimentos() {
   };
 
   const allocationData = INVESTMENT_TYPES.map(type => {
-    const typeInvestments = investments.filter(inv => inv.type === type.value);
+    const allInvestments = [...investments, ...closedInvestments];
+    const typeInvestments = allInvestments.filter(inv => inv.type === type.value);
     const totalBalance = typeInvestments.reduce((sum, inv) => sum + inv.current_balance, 0);
     return {
       name: type.label,
@@ -640,6 +655,95 @@ function Investimentos() {
             )}
           </CardContent>
         </Card>
+
+        {/* Investimentos Encerrados */}
+        <Accordion type="single" collapsible className="mt-6">
+          <AccordionItem value="closed-investments" disabled={closedInvestments.length === 0}>
+            <AccordionTrigger className="hover:no-underline">
+              <span className="text-lg font-semibold">
+                Investimentos Encerrados ({closedInvestments.length})
+              </span>
+            </AccordionTrigger>
+            <AccordionContent>
+              <Card>
+                <CardContent className="pt-6">
+                  {closedInvestments.length > 0 ? (
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Nome do Investimento</TableHead>
+                          <TableHead>Tipo</TableHead>
+                          <TableHead>Indicador</TableHead>
+                          <TableHead>Valor Inicial</TableHead>
+                          <TableHead>Rentabilidade Final</TableHead>
+                          <TableHead>Ações</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {closedInvestments.map((investment) => (
+                          <TableRow key={investment.id}>
+                            <TableCell className="font-medium">{investment.name}</TableCell>
+                            <TableCell>{getTypeLabel(investment.type)}</TableCell>
+                            <TableCell>{investment.indicator || '-'}</TableCell>
+                            <TableCell>
+                              R$ {investment.initial_amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                            </TableCell>
+                            <TableCell>
+                              {investment.rentabilidade != null ? (
+                                <span className={`font-medium ${investment.rentabilidade >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                  {investment.rentabilidade.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%
+                                </span>
+                              ) : (
+                                <span className="text-muted-foreground">-</span>
+                              )}
+                            </TableCell>
+                            <TableCell>
+                              <div className="flex space-x-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleEdit(investment)}
+                                >
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                      <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        Tem certeza que deseja excluir o investimento "{investment.name}"?
+                                        Esta ação não pode ser desfeita.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => handleDelete(investment.id)}>
+                                        Excluir
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  ) : (
+                    <div className="text-center py-8 text-muted-foreground">
+                      Nenhum investimento encerrado encontrado.
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </AccordionContent>
+          </AccordionItem>
+        </Accordion>
       </div>
     </div>
   );
