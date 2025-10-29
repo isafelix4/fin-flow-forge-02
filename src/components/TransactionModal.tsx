@@ -265,12 +265,14 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
       if (transactionData.investment_id) {
         const { data: investmentData } = await supabase
           .from('investments')
-          .select('current_balance')
+          .select('current_balance, initial_amount')
           .eq('id', transactionData.investment_id)
           .single();
 
         if (investmentData) {
           let newBalance;
+          const isFirstDeposit = investmentData.current_balance === 0 && transactionData.type === 'Expense';
+          
           if (transactionData.type === 'Expense') {
             // Aporte - increase balance
             newBalance = investmentData.current_balance + transactionData.amount;
@@ -279,10 +281,21 @@ export const TransactionModal: React.FC<TransactionModalProps> = ({
             newBalance = Math.max(0, investmentData.current_balance - transactionData.amount);
           }
 
-          await supabase
-            .from('investments')
-            .update({ current_balance: newBalance })
-            .eq('id', transactionData.investment_id);
+          // Se é o primeiro aporte, atualizar também o initial_amount
+          if (isFirstDeposit) {
+            await supabase
+              .from('investments')
+              .update({ 
+                current_balance: newBalance,
+                initial_amount: transactionData.amount
+              })
+              .eq('id', transactionData.investment_id);
+          } else {
+            await supabase
+              .from('investments')
+              .update({ current_balance: newBalance })
+              .eq('id', transactionData.investment_id);
+          }
         }
       }
     } catch (error) {
