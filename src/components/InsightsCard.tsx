@@ -118,10 +118,16 @@ export const InsightsCard: React.FC<InsightsCardProps> = ({ insights, loading })
                   vs {formatCurrency(insight.averageAmount)} (média)
                 </span>
               </div>
-              <p className="text-xs text-destructive font-medium">
-                +{insight.variation.toFixed(0)}% acima da média
-                {insight.absoluteDiff > 0 && ` (+${formatCurrency(insight.absoluteDiff)})`}
-              </p>
+              {insight.averageAmount > 0 ? (
+                <p className="text-xs text-destructive font-medium">
+                  +{insight.variation.toFixed(0)}% acima da média
+                  {insight.absoluteDiff > 0 && ` (+${formatCurrency(insight.absoluteDiff)})`}
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Sem histórico para comparação
+                </p>
+              )}
             </div>
           </div>
         ))}

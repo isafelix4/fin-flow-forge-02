@@ -128,6 +128,9 @@ const Index = () => {
       const currentTransactions = currentTransactionsResponse.data || [];
       const historicalTransactions = historicalTransactionsResponse.data || [];
 
+      console.log('Historical transactions:', historicalTransactions.length);
+      console.log('Previous months:', previousMonths);
+
       // Calculate current month totals
       const income = currentTransactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + Number(t.amount), 0);
       const expenses = currentTransactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + Number(t.amount), 0);
@@ -171,7 +174,9 @@ const Index = () => {
           }
         }
       });
-      const monthsCount = historicalByMonth.size || 1;
+      const monthsCount = historicalByMonth.size;
+      console.log('Months with historical data:', monthsCount);
+      
       let totalHistoricalIncome = 0;
       let totalHistoricalExpenses = 0;
       let totalHistoricalDebtPayments = 0;
@@ -180,6 +185,7 @@ const Index = () => {
         name: string;
         total: number;
       }>();
+      
       historicalByMonth.forEach(monthData => {
         totalHistoricalIncome += monthData.income;
         totalHistoricalExpenses += monthData.expenses;
@@ -204,18 +210,24 @@ const Index = () => {
           existing.name = t.categories.name;
         }
       });
-      const avgIncome = totalHistoricalIncome / monthsCount;
-      const avgExpenses = totalHistoricalExpenses / monthsCount;
-      const avgDebtPayments = totalHistoricalDebtPayments / monthsCount;
-      const avgInvestmentContributions = totalHistoricalInvestmentContributions / monthsCount;
+      
+      // Only calculate averages if we have historical data
+      const avgIncome = monthsCount > 0 ? totalHistoricalIncome / monthsCount : 0;
+      const avgExpenses = monthsCount > 0 ? totalHistoricalExpenses / monthsCount : 0;
+      const avgDebtPayments = monthsCount > 0 ? totalHistoricalDebtPayments / monthsCount : 0;
+      const avgInvestmentContributions = monthsCount > 0 ? totalHistoricalInvestmentContributions / monthsCount : 0;
       
       const categoryAvgs: CategoryAverage = {};
-      categoryTotals.forEach((data, categoryId) => {
-        categoryAvgs[categoryId] = {
-          name: data.name,
-          average: data.total / monthsCount
-        };
-      });
+      if (monthsCount > 0) {
+        categoryTotals.forEach((data, categoryId) => {
+          categoryAvgs[categoryId] = {
+            name: data.name,
+            average: data.total / monthsCount
+          };
+        });
+      }
+      
+      console.log('Category averages:', categoryAvgs);
 
       // Prepare expense data for chart
       const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories).map(t => ({
@@ -316,20 +328,20 @@ const Index = () => {
       const variation = average > 0 ? ((currentAmount - average) / average) * 100 : 0;
       const absoluteDiff = currentAmount - average;
 
-      // Determine if it's a point of attention
+      // Determine severity based on two separate criteria:
       let severity: 'critical' | 'high' | 'medium' | null = null;
 
-      // Critical: >= 20% of total income
+      // Criterion 1: Percentage of income (CRITICAL)
       if (percentageOfIncome >= 20) {
         severity = 'critical';
       }
-      // High: >= 30% above average
-      else if (variation >= 30) {
-        severity = 'high';
-      }
-      // Medium: >= 20% above average
-      else if (variation >= 20) {
-        severity = 'medium';
+      // Criterion 2: Variation from average (only if we have historical data)
+      else if (average > 0) {
+        if (variation > 20) {
+          severity = 'high';
+        } else if (variation >= 10) {
+          severity = 'medium';
+        }
       }
 
       if (severity) {
@@ -344,6 +356,8 @@ const Index = () => {
         });
       }
     });
+
+    console.log('Generated insights:', insights);
 
     // Sort by severity and then by variation (descending)
     const severityOrder = { critical: 0, high: 1, medium: 2 };
