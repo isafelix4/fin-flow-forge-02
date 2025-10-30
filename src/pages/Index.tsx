@@ -13,6 +13,7 @@ import { Link } from 'react-router-dom';
 import { Upload, TrendingUp, Filter, ArrowUp, ArrowDown, Equal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import GraficoDespesasInterativo from '@/components/GraficoDespesasInterativo';
+import { InsightsCard, CategoryInsight } from '@/components/InsightsCard';
 interface DashboardData {
   income: number;
   expenses: number;
@@ -69,6 +70,7 @@ const Index = () => {
   });
   const [categoryAverages, setCategoryAverages] = useState<CategoryAverage>({});
   const [currentExpenseData, setCurrentExpenseData] = useState<ExpenseData[]>([]);
+  const [insights, setInsights] = useState<CategoryInsight[]>([]);
   const loadDashboardData = async () => {
     if (!user) return;
     try {
@@ -245,6 +247,14 @@ const Index = () => {
       });
       setCategoryAverages(categoryAvgs);
       setCurrentExpenseData(expenseData);
+
+      // Generate insights
+      const generatedInsights = generateInsights(
+        currentTransactions,
+        categoryAvgs,
+        income
+      );
+      setInsights(generatedInsights);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       toast({
@@ -259,6 +269,95 @@ const Index = () => {
   useEffect(() => {
     loadDashboardData();
   }, [referenceMonth, user]);
+  const generateInsights = (
+    transactions: any[],
+    categoryAvgs: CategoryAverage,
+    totalIncome: number
+  ): CategoryInsight[] => {
+    // Group expenses by category (excluding Debt and Investment types)
+    const categoryExpenses = new Map<number, {
+      name: string;
+      amount: number;
+      type: string;
+    }>();
+
+    transactions
+      .filter(t => t.type === 'Expense' && t.categories)
+      .forEach(t => {
+        const catId = t.categories.id;
+        const catType = t.categories.type;
+        
+        // Skip Debt and Investment categories
+        if (catType === 'Debt' || catType === 'Investment') {
+          return;
+        }
+
+        const existing = categoryExpenses.get(catId) || {
+          name: t.categories.name,
+          amount: 0,
+          type: catType
+        };
+        categoryExpenses.set(catId, {
+          ...existing,
+          amount: existing.amount + Number(t.amount)
+        });
+      });
+
+    const insights: CategoryInsight[] = [];
+
+    categoryExpenses.forEach((data, categoryId) => {
+      const average = categoryAvgs[categoryId]?.average || 0;
+      const currentAmount = data.amount;
+      
+      // Calculate percentage of total income
+      const percentageOfIncome = totalIncome > 0 ? (currentAmount / totalIncome) * 100 : 0;
+      
+      // Calculate variation from average
+      const variation = average > 0 ? ((currentAmount - average) / average) * 100 : 0;
+      const absoluteDiff = currentAmount - average;
+
+      // Determine if it's a point of attention
+      let severity: 'critical' | 'high' | 'medium' | null = null;
+
+      // Critical: >= 20% of total income
+      if (percentageOfIncome >= 20) {
+        severity = 'critical';
+      }
+      // High: >= 30% above average
+      else if (variation >= 30) {
+        severity = 'high';
+      }
+      // Medium: >= 20% above average
+      else if (variation >= 20) {
+        severity = 'medium';
+      }
+
+      if (severity) {
+        insights.push({
+          categoryId,
+          categoryName: data.name,
+          currentAmount,
+          averageAmount: average,
+          variation,
+          absoluteDiff,
+          severity
+        });
+      }
+    });
+
+    // Sort by severity and then by variation (descending)
+    const severityOrder = { critical: 0, high: 1, medium: 2 };
+    insights.sort((a, b) => {
+      if (severityOrder[a.severity] !== severityOrder[b.severity]) {
+        return severityOrder[a.severity] - severityOrder[b.severity];
+      }
+      return b.variation - a.variation;
+    });
+
+    // Return top 5 insights
+    return insights.slice(0, 5);
+  };
+
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
       style: 'currency',
@@ -343,6 +442,9 @@ const Index = () => {
           </label>
           <MonthYearPicker value={referenceMonth} onValueChange={setReferenceMonth} placeholder="Selecione o mês" className="w-full sm:w-auto" />
         </div>
+
+        {/* Insights Card */}
+        <InsightsCard insights={insights} loading={loading} />
 
         {/* Fluxo de Caixa Section */}
         <div className="space-y-4">
