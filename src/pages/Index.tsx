@@ -128,8 +128,10 @@ const Index = () => {
       const currentTransactions = currentTransactionsResponse.data || [];
       const historicalTransactions = historicalTransactionsResponse.data || [];
 
-      console.log('Historical transactions:', historicalTransactions.length);
-      console.log('Previous months:', previousMonths);
+      console.log('=== CÁLCULO DE MÉDIAS ===');
+      console.log('Mês de referência:', referenceMonth);
+      console.log('3 meses anteriores:', previousMonths);
+      console.log('Total de transações históricas:', historicalTransactions.length);
 
       // Calculate current month totals
       const income = currentTransactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + Number(t.amount), 0);
@@ -137,7 +139,8 @@ const Index = () => {
       const debtPayments = currentTransactions.filter(t => t.type === 'Expense' && t.categories?.type === 'Debt').reduce((sum, t) => sum + Number(t.amount), 0);
       const investmentContributions = currentTransactions.filter(t => t.type === 'Expense' && t.categories?.type === 'Investment').reduce((sum, t) => sum + Number(t.amount), 0);
 
-      // Calculate historical averages
+      // Calculate historical averages from the 3 previous months
+      // Initialize data structure for exactly 3 months
       const historicalByMonth = new Map<string, {
         income: number;
         expenses: number;
@@ -145,38 +148,63 @@ const Index = () => {
         investmentContributions: number;
         categories: Map<number, number>;
       }>();
+
+      // Pre-initialize all 3 previous months with zero values
+      previousMonths.forEach(month => {
+        historicalByMonth.set(month, {
+          income: 0,
+          expenses: 0,
+          debtPayments: 0,
+          investmentContributions: 0,
+          categories: new Map()
+        });
+      });
+
+      // Process historical transactions
       historicalTransactions.forEach(t => {
         const month = t.reference_month;
         if (!historicalByMonth.has(month)) {
-          historicalByMonth.set(month, {
-            income: 0,
-            expenses: 0,
-            debtPayments: 0,
-            investmentContributions: 0,
-            categories: new Map()
-          });
+          console.warn('Transaction with unexpected month:', month, 'Expected:', previousMonths);
+          return;
         }
+        
         const monthData = historicalByMonth.get(month)!;
         const amount = Number(t.amount);
+        
         if (t.type === 'Income') {
           monthData.income += amount;
         } else if (t.type === 'Expense') {
           monthData.expenses += amount;
+          
           // Track debt payments and investment contributions
           if (t.categories?.type === 'Debt') {
             monthData.debtPayments += amount;
           } else if (t.categories?.type === 'Investment') {
             monthData.investmentContributions += amount;
           }
+          
+          // Track by category
           if (t.category_id) {
             const currentCategoryAmount = monthData.categories.get(t.category_id) || 0;
             monthData.categories.set(t.category_id, currentCategoryAmount + amount);
           }
         }
       });
-      const monthsCount = historicalByMonth.size;
-      console.log('Months with historical data:', monthsCount);
-      
+
+      // Log detailed breakdown by month
+      console.log('Breakdown by month:');
+      historicalByMonth.forEach((data, month) => {
+        console.log(`${month}:`, {
+          income: data.income,
+          expenses: data.expenses,
+          categoriesCount: data.categories.size
+        });
+        data.categories.forEach((amount, catId) => {
+          console.log(`  Category ${catId}: R$ ${amount}`);
+        });
+      });
+
+      // Sum totals across all 3 months
       let totalHistoricalIncome = 0;
       let totalHistoricalExpenses = 0;
       let totalHistoricalDebtPayments = 0;
@@ -191,6 +219,7 @@ const Index = () => {
         totalHistoricalExpenses += monthData.expenses;
         totalHistoricalDebtPayments += monthData.debtPayments;
         totalHistoricalInvestmentContributions += monthData.investmentContributions;
+        
         monthData.categories.forEach((amount, categoryId) => {
           const existing = categoryTotals.get(categoryId) || {
             name: '',
@@ -205,29 +234,37 @@ const Index = () => {
 
       // Get category names from historical data
       historicalTransactions.forEach(t => {
-        if (t.category_id && t.categories && categoryTotals.has(t.category_id)) {
-          const existing = categoryTotals.get(t.category_id)!;
-          existing.name = t.categories.name;
+        if (t.category_id && t.categories) {
+          if (categoryTotals.has(t.category_id)) {
+            const existing = categoryTotals.get(t.category_id)!;
+            if (!existing.name) {
+              existing.name = t.categories.name;
+            }
+          }
         }
       });
       
-      // Only calculate averages if we have historical data
-      const avgIncome = monthsCount > 0 ? totalHistoricalIncome / monthsCount : 0;
-      const avgExpenses = monthsCount > 0 ? totalHistoricalExpenses / monthsCount : 0;
-      const avgDebtPayments = monthsCount > 0 ? totalHistoricalDebtPayments / monthsCount : 0;
-      const avgInvestmentContributions = monthsCount > 0 ? totalHistoricalInvestmentContributions / monthsCount : 0;
+      // Calculate averages by dividing by 3 (always 3 months)
+      const MONTHS_FOR_AVERAGE = 3;
+      const avgIncome = totalHistoricalIncome / MONTHS_FOR_AVERAGE;
+      const avgExpenses = totalHistoricalExpenses / MONTHS_FOR_AVERAGE;
+      const avgDebtPayments = totalHistoricalDebtPayments / MONTHS_FOR_AVERAGE;
+      const avgInvestmentContributions = totalHistoricalInvestmentContributions / MONTHS_FOR_AVERAGE;
       
       const categoryAvgs: CategoryAverage = {};
-      if (monthsCount > 0) {
-        categoryTotals.forEach((data, categoryId) => {
-          categoryAvgs[categoryId] = {
-            name: data.name,
-            average: data.total / monthsCount
-          };
-        });
-      }
+      categoryTotals.forEach((data, categoryId) => {
+        const average = data.total / MONTHS_FOR_AVERAGE;
+        categoryAvgs[categoryId] = {
+          name: data.name,
+          average: average
+        };
+        console.log(`Categoria "${data.name}" (ID: ${categoryId}): Total R$ ${data.total.toFixed(2)} / ${MONTHS_FOR_AVERAGE} = Média R$ ${average.toFixed(2)}`);
+      });
       
-      console.log('Category averages:', categoryAvgs);
+      console.log('Totais gerais:');
+      console.log(`  Receita média: R$ ${avgIncome.toFixed(2)}`);
+      console.log(`  Despesa média: R$ ${avgExpenses.toFixed(2)}`);
+      console.log('=== FIM CÁLCULO DE MÉDIAS ===');
 
       // Prepare expense data for chart
       const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories).map(t => ({
