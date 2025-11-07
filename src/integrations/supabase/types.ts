@@ -254,7 +254,7 @@ export type Database = {
           event_details: Json | null
           event_type: string
           id: string
-          ip_address: unknown | null
+          ip_address: unknown
           user_agent: string | null
           user_id: string | null
         }
@@ -263,7 +263,7 @@ export type Database = {
           event_details?: Json | null
           event_type: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           user_agent?: string | null
           user_id?: string | null
         }
@@ -272,7 +272,7 @@ export type Database = {
           event_details?: Json | null
           event_type?: string
           id?: string
-          ip_address?: unknown | null
+          ip_address?: unknown
           user_agent?: string | null
           user_id?: string | null
         }
@@ -406,6 +406,19 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_category_insights: {
+        Args: { ref_month: string }
+        Returns: {
+          category_id: number
+          category_name: string
+          current_expense: number
+          deviation_pct: number
+          income_in_month: number
+          prev3_avg_expense: number
+          severity: string
+          share_over_income: number
+        }[]
+      }
       get_public_profile_info: {
         Args: { profile_id: string }
         Returns: {
@@ -415,7 +428,7 @@ export type Database = {
         }[]
       }
       get_secure_public_profiles: {
-        Args: Record<PropertyKey, never>
+        Args: never
         Returns: {
           created_at: string
           email_hash: string
@@ -423,10 +436,7 @@ export type Database = {
           name: string
         }[]
       }
-      hash_email: {
-        Args: { email_input: string }
-        Returns: string
-      }
+      hash_email: { Args: { email_input: string }; Returns: string }
       log_security_event: {
         Args: {
           event_details_input?: Json
