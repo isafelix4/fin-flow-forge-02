@@ -32,7 +32,7 @@ export async function fetchCategoryInsights(refMonthStr: string): Promise<Catego
 
   const insights = (data ?? []) as CategoryInsight[];
 
-  // Ordena por severidade (crítico > alto > médio) e depois por valor absoluto
+  // Ordena por severidade (crítico > alto > médio) e depois por diferença monetária
   return insights
     .filter((i) => i.severity !== null)
     .sort((a, b) => {
@@ -44,7 +44,9 @@ export async function fetchCategoryInsights(refMonthStr: string): Promise<Catego
         return severityA - severityB;
       }
       
-      // Depois por valor de despesa (maior primeiro)
-      return (b.current_expense ?? 0) - (a.current_expense ?? 0);
+      // Depois pela diferença monetária (maior diferença primeiro)
+      const diffA = (a.current_expense ?? 0) - (a.prev3_avg_expense ?? 0);
+      const diffB = (b.current_expense ?? 0) - (b.prev3_avg_expense ?? 0);
+      return diffB - diffA;
     });
 }
