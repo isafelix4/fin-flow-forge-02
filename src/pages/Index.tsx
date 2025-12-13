@@ -396,7 +396,7 @@ const Index = () => {
         </div>
 
         {/* Insights Card */}
-        <InsightsCard refMonth={new Date(referenceMonth)} />
+        <InsightsCard refMonth={referenceMonth} />
 
         {/* Fluxo de Caixa Section */}
         <div className="space-y-4">

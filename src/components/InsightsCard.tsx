@@ -6,7 +6,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useCategoryInsights } from '@/features/insights/useCategoryInsights';
 
 interface InsightsCardProps {
-  refMonth: Date;
+  refMonth: string; // yyyy-MM-dd string para evitar problemas de timezone
 }
 
 export const InsightsCard: React.FC<InsightsCardProps> = ({ refMonth }) => {
