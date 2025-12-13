@@ -1,5 +1,4 @@
 import { supabase } from "@/integrations/supabase/client";
-import { format } from "date-fns";
 
 export type CategoryInsight = {
   category_id: number;
@@ -19,15 +18,15 @@ const severityOrder: Record<string, number> = {
   medio: 3,
 };
 
-export async function fetchCategoryInsights(refMonth: Date): Promise<CategoryInsight[]> {
-  // Formata a data como string yyyy-MM-dd para evitar problemas de timezone
-  // Usa os valores locais do Date (getFullYear, getMonth) para garantir o mês correto
-  const year = refMonth.getFullYear();
-  const month = refMonth.getMonth(); // 0-indexed
-  const refMonthStr = format(new Date(year, month, 1), "yyyy-MM-dd");
+// Recebe string (yyyy-MM-dd) diretamente para evitar problemas de timezone
+export async function fetchCategoryInsights(refMonthStr: string): Promise<CategoryInsight[]> {
+  // Garante formato yyyy-MM-01 para o primeiro dia do mês
+  const refMonthFormatted = refMonthStr.substring(0, 7) + "-01";
+  
+  console.log("Buscando insights para mês de referência:", refMonthFormatted);
 
   const { data, error } = await supabase
-    .rpc("get_category_insights", { ref_month: refMonthStr });
+    .rpc("get_category_insights", { ref_month: refMonthFormatted });
 
   if (error) throw error;
 
