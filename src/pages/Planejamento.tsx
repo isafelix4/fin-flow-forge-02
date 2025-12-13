@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
@@ -12,7 +12,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Save, X, Loader2 } from 'lucide-react';
 import { ImprovedAddBudgetModal } from '@/components/ImprovedAddBudgetModal';
 
 interface Category {
@@ -58,14 +58,25 @@ const Planejamento = () => {
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [localBudgets, setLocalBudgets] = useState<Budget[]>([]);
   const [transactionSummaries, setTransactionSummaries] = useState<TransactionSummary[]>([]);
   const [loading, setLoading] = useState(true);
-  const [savingTimeouts, setSavingTimeouts] = useState<{ [key: string]: NodeJS.Timeout }>({});
+  const [isSaving, setIsSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [modalPlanType, setModalPlanType] = useState<'RECEITA' | 'DESPESA'>('RECEITA');
 
-  // Summary calculations
-  const receitasPlanejadas = budgets
+  // Detecta se há alterações não salvas
+  const hasUnsavedChanges = useMemo(() => {
+    if (budgets.length !== localBudgets.length) return true;
+    return localBudgets.some(local => {
+      const original = budgets.find(b => b.id === local.id);
+      if (!original) return true;
+      return original.planned_amount !== local.planned_amount;
+    });
+  }, [budgets, localBudgets]);
+
+  // Summary calculations baseados no estado local
+  const receitasPlanejadas = localBudgets
     .filter(b => b.plan_type === 'RECEITA')
     .reduce((sum, b) => sum + Number(b.planned_amount), 0);
 
@@ -73,7 +84,7 @@ const Planejamento = () => {
     .filter(t => t.transaction_type === 'Income')
     .reduce((sum, t) => sum + Number(t.total_amount), 0);
 
-  const despesasPlanejadas = budgets
+  const despesasPlanejadas = localBudgets
     .filter(b => b.plan_type === 'DESPESA')
     .reduce((sum, b) => sum + Number(b.planned_amount), 0);
 
@@ -155,12 +166,14 @@ const Planejamento = () => {
       });
 
       setCategories(categoriesData || []);
-      setBudgets((budgetsData || []).map(budget => ({
+      const mappedBudgets = (budgetsData || []).map(budget => ({
         ...budget,
         plan_type: budget.plan_type as 'RECEITA' | 'DESPESA',
         category_name: (budget as any).categories?.name,
         subcategory_name: (budget as any).subcategories?.name
-      })));
+      }));
+      setBudgets(mappedBudgets);
+      setLocalBudgets(mappedBudgets);
       setTransactionSummaries(summaries);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
@@ -199,13 +212,16 @@ const Planejamento = () => {
 
       if (error) throw error;
 
-      // Update local state
-      setBudgets(prev => [...prev, {
+      const newBudget = {
         ...budgetData,
         id: data.id,
         category_name: item.category_name,
         subcategory_name: item.subcategory_name
-      }]);
+      };
+
+      // Update both states
+      setBudgets(prev => [...prev, newBudget]);
+      setLocalBudgets(prev => [...prev, newBudget]);
 
       toast({
         title: "Sucesso",
@@ -230,8 +246,9 @@ const Planejamento = () => {
 
       if (error) throw error;
 
-      // Update local state
+      // Update both states
       setBudgets(prev => prev.filter(b => b.id !== budgetId));
+      setLocalBudgets(prev => prev.filter(b => b.id !== budgetId));
 
       toast({
         title: "Sucesso",
@@ -247,47 +264,66 @@ const Planejamento = () => {
     }
   }, [toast]);
 
-  const updatePlannedAmount = useCallback(async (budgetId: number, newAmount: number) => {
+  // Atualiza apenas o estado local (sem salvar no banco)
+  const updateLocalPlannedAmount = useCallback((budgetId: number, newAmount: number) => {
+    setLocalBudgets(prev => prev.map(b => 
+      b.id === budgetId ? { ...b, planned_amount: newAmount } : b
+    ));
+  }, []);
+
+  // Salva todas as alterações de uma vez (Batch Upsert)
+  const handleSaveChanges = useCallback(async () => {
+    if (!user || !hasUnsavedChanges) return;
+
     try {
+      setIsSaving(true);
+
+      // Prepara o payload para upsert
+      const payload = localBudgets.map(budget => ({
+        id: budget.id,
+        user_id: user.id,
+        reference_month: referenceMonth,
+        category_id: budget.category_id,
+        subcategory_id: budget.subcategory_id,
+        planned_amount: budget.planned_amount,
+        plan_type: budget.plan_type
+      }));
+
       const { error } = await supabase
         .from('budgets')
-        .update({ planned_amount: newAmount })
-        .eq('id', budgetId);
+        .upsert(payload, { 
+          onConflict: 'user_id,reference_month,category_id,subcategory_id' 
+        });
 
       if (error) throw error;
 
-      // Update local state
-      setBudgets(prev => prev.map(b => 
-        b.id === budgetId ? { ...b, planned_amount: newAmount } : b
-      ));
+      // Sincroniza o estado original com o local
+      setBudgets(localBudgets);
+
+      toast({
+        title: "Sucesso",
+        description: "Planejamento salvo com sucesso!",
+      });
     } catch (error) {
-      console.error('Erro ao atualizar valor planejado:', error);
+      console.error('Erro ao salvar alterações:', error);
       toast({
         title: "Erro",
-        description: "Não foi possível salvar o planejamento.",
+        description: "Não foi possível salvar as alterações.",
         variant: "destructive",
       });
+    } finally {
+      setIsSaving(false);
     }
-  }, [toast]);
+  }, [user, referenceMonth, localBudgets, hasUnsavedChanges, toast]);
 
-  const debouncedSave = useCallback((budgetId: number, value: number) => {
-    const key = `budget-${budgetId}`;
-    
-    if (savingTimeouts[key]) {
-      clearTimeout(savingTimeouts[key]);
-    }
-
-    const timeout = setTimeout(() => {
-      updatePlannedAmount(budgetId, value);
-      setSavingTimeouts(prev => {
-        const updated = { ...prev };
-        delete updated[key];
-        return updated;
-      });
-    }, 500);
-
-    setSavingTimeouts(prev => ({ ...prev, [key]: timeout }));
-  }, [updatePlannedAmount, savingTimeouts]);
+  // Descarta as alterações e recarrega os dados originais
+  const handleCancelChanges = useCallback(() => {
+    setLocalBudgets(budgets);
+    toast({
+      title: "Alterações descartadas",
+      description: "Os valores foram restaurados.",
+    });
+  }, [budgets, toast]);
 
   const getRealizedValue = (transactionType: 'Income' | 'Expense', categoryId: number, subcategoryId: number | null = null) => {
     const summary = transactionSummaries.find(t => 
@@ -305,23 +341,9 @@ const Planejamento = () => {
     }).format(value);
   };
 
-  const groupBudgetsByCategory = (planType: 'RECEITA' | 'DESPESA') => {
-    const filtered = budgets.filter(b => b.plan_type === planType);
-    const grouped: { [categoryId: number]: Budget[] } = {};
-
-    filtered.forEach(budget => {
-      if (!grouped[budget.category_id]) {
-        grouped[budget.category_id] = [];
-      }
-      grouped[budget.category_id].push(budget);
-    });
-
-    return grouped;
-  };
-
   const renderBudgetRows = (planType: 'RECEITA' | 'DESPESA') => {
     const transactionType = planType === 'RECEITA' ? 'Income' : 'Expense';
-    const filteredBudgets = budgets.filter(b => b.plan_type === planType);
+    const filteredBudgets = localBudgets.filter(b => b.plan_type === planType);
 
     if (filteredBudgets.length === 0) {
       return (
@@ -358,7 +380,7 @@ const Planejamento = () => {
               value={budget.planned_amount || ''}
               onChange={(e) => {
                 const value = parseFloat(e.target.value) || 0;
-                debouncedSave(budget.id, value);
+                updateLocalPlannedAmount(budget.id, value);
               }}
               className="h-8 w-24"
             />
@@ -433,6 +455,40 @@ const Planejamento = () => {
               placeholder="Selecionar período"
             />
           </div>
+
+          {/* Barra de Ações - Salvar/Cancelar */}
+          {hasUnsavedChanges && (
+            <div className="sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border rounded-lg p-4 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-muted-foreground">
+                  Você tem alterações não salvas.
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCancelChanges}
+                    disabled={isSaving}
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={handleSaveChanges}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? (
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4 mr-2" />
+                    )}
+                    Salvar Alterações
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Summary Cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -573,7 +629,7 @@ const Planejamento = () => {
         onOpenChange={setShowAddModal}
         planType={modalPlanType}
         onAddItem={addBudgetItem}
-        existingBudgets={budgets}
+        existingBudgets={localBudgets}
         categories={categories}
       />
     </div>
