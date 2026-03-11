@@ -114,7 +114,7 @@ export default function Transacoes() {
       query = query.eq('reference_month', filterMonth);
     }
     if (filterType && filterType !== 'all') {
-      query = query.eq('type', filterType);
+      query = query.eq('type', filterType as Database['public']['Enums']['transaction_type']);
     }
     if (filterAccountId && filterAccountId !== 'all') {
       query = query.eq('account_id', parseInt(filterAccountId));
