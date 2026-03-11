@@ -1,14 +1,17 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Edit, Trash2, Plus, Upload, ArrowUpDown, ArrowUp, ArrowDown } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Edit, Trash2, Plus, Upload, ArrowUpDown, ArrowUp, ArrowDown, Search, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Header } from '@/components/Header';
 import { TransactionModal } from '@/components/TransactionModal';
+import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Database } from '@/integrations/supabase/types';
 import { Link } from 'react-router-dom';
 
@@ -32,6 +35,22 @@ interface Transaction {
   debts?: { description: string };
 }
 
+interface Account {
+  id: number;
+  name: string;
+}
+
+interface Category {
+  id: number;
+  name: string;
+}
+
+interface Subcategory {
+  id: number;
+  name: string;
+  category_id: number;
+}
+
 export default function Transacoes() {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -42,27 +61,81 @@ export default function Transacoes() {
   const [sortBy, setSortBy] = useState<string>('transaction_date');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
+  // Filter states
+  const [filterMonth, setFilterMonth] = useState<string>('');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterAccountId, setFilterAccountId] = useState<string>('all');
+  const [filterCategoryId, setFilterCategoryId] = useState<string>('all');
+  const [filterSubcategoryId, setFilterSubcategoryId] = useState<string>('all');
+  const [filterDescription, setFilterDescription] = useState<string>('');
+
+  // Lookup data
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [subcategories, setSubcategories] = useState<Subcategory[]>([]);
+
+  useEffect(() => {
+    if (user) {
+      fetchLookupData();
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       fetchTransactions();
     }
-  }, [user, sortBy, sortOrder]);
+  }, [user, sortBy, sortOrder, filterMonth, filterType, filterAccountId, filterCategoryId, filterSubcategoryId, filterDescription]);
+
+  const fetchLookupData = async () => {
+    const [accountsRes, categoriesRes, subcategoriesRes] = await Promise.all([
+      supabase.from('accounts').select('id, name').eq('user_id', user!.id).order('name'),
+      supabase.from('categories').select('id, name').eq('user_id', user!.id).order('name'),
+      supabase.from('subcategories').select('id, name, category_id').eq('user_id', user!.id).order('name'),
+    ]);
+    setAccounts(accountsRes.data || []);
+    setCategories(categoriesRes.data || []);
+    setSubcategories(subcategoriesRes.data || []);
+  };
+
+  const buildQuery = () => {
+    let query = supabase
+      .from('transactions')
+      .select(`
+        *,
+        accounts(name),
+        categories(name, type),
+        subcategories(name),
+        investments(name),
+        debts(description)
+      `)
+      .eq('user_id', user!.id);
+
+    if (filterMonth) {
+      query = query.eq('reference_month', filterMonth);
+    }
+    if (filterType && filterType !== 'all') {
+      query = query.eq('type', filterType);
+    }
+    if (filterAccountId && filterAccountId !== 'all') {
+      query = query.eq('account_id', parseInt(filterAccountId));
+    }
+    if (filterCategoryId && filterCategoryId !== 'all') {
+      query = query.eq('category_id', parseInt(filterCategoryId));
+    }
+    if (filterSubcategoryId && filterSubcategoryId !== 'all') {
+      query = query.eq('subcategory_id', parseInt(filterSubcategoryId));
+    }
+    if (filterDescription.trim()) {
+      query = query.ilike('description', `%${filterDescription.trim()}%`);
+    }
+
+    return query;
+  };
 
   const fetchTransactions = async () => {
     try {
-      // Handle special sorting for category and subcategory names
       if (sortBy === 'category_id' || sortBy === 'subcategory_id') {
-        const { data, error } = await supabase
-          .from('transactions')
-          .select(`
-            *,
-            accounts(name),
-            categories(name, type),
-            subcategories(name),
-            investments(name),
-            debts(description)
-          `)
-          .eq('user_id', user?.id);
+        const { data, error } = await buildQuery();
 
         if (error) throw error;
         
@@ -72,7 +145,7 @@ export default function Transacoes() {
           if (sortBy === 'category_id') {
             aValue = a.categories?.name || '';
             bValue = b.categories?.name || '';
-          } else { // subcategory_id
+          } else {
             aValue = a.subcategories?.name || '';
             bValue = b.subcategories?.name || '';
           }
@@ -86,17 +159,7 @@ export default function Transacoes() {
         
         setTransactions(sortedData);
       } else {
-        const { data, error } = await supabase
-          .from('transactions')
-          .select(`
-            *,
-            accounts(name),
-            categories(name, type),
-            subcategories(name),
-            investments(name),
-            debts(description)
-          `)
-          .eq('user_id', user?.id)
+        const { data, error } = await buildQuery()
           .order(sortBy, { ascending: sortOrder === 'asc' });
 
         if (error) throw error;
@@ -121,7 +184,6 @@ export default function Transacoes() {
 
   const revertTransactionImpact = async (transaction: Transaction) => {
     try {
-      // Reverter impacto em dívidas
       if (transaction.debt_id) {
         const { data: debtData } = await supabase
           .from('debts')
@@ -130,7 +192,6 @@ export default function Transacoes() {
           .single();
 
         if (debtData) {
-          // Reverter pagamento de dívida - aumentar o saldo devedor
           const revertedBalance = debtData.current_balance + transaction.amount;
           const revertedInstallments = debtData.remaining_installments !== null 
             ? debtData.remaining_installments + 1 
@@ -146,7 +207,6 @@ export default function Transacoes() {
         }
       }
 
-      // Reverter impacto em investimentos
       if (transaction.investment_id) {
         const { data: investmentData } = await supabase
           .from('investments')
@@ -157,10 +217,8 @@ export default function Transacoes() {
         if (investmentData) {
           let revertedBalance;
           if (transaction.type === 'Expense') {
-            // Reverter aporte - diminuir o saldo
             revertedBalance = Math.max(0, investmentData.current_balance - transaction.amount);
           } else {
-            // Reverter resgate - aumentar o saldo
             revertedBalance = investmentData.current_balance + transaction.amount;
           }
 
@@ -177,7 +235,6 @@ export default function Transacoes() {
 
   const handleDelete = async (id: number) => {
     try {
-      // Buscar a transação completa antes de excluir para reverter impactos
       const { data: transactionToDelete, error: fetchError } = await supabase
         .from('transactions')
         .select('*')
@@ -186,12 +243,10 @@ export default function Transacoes() {
 
       if (fetchError) throw fetchError;
 
-      // Reverter impactos nos saldos antes de excluir
       if (transactionToDelete) {
         await revertTransactionImpact(transactionToDelete);
       }
 
-      // Excluir a transação
       const { error } = await supabase
         .from('transactions')
         .delete()
@@ -242,6 +297,22 @@ export default function Transacoes() {
       : <ArrowDown className="h-4 w-4 ml-2" />;
   };
 
+  const clearFilters = () => {
+    setFilterMonth('');
+    setFilterType('all');
+    setFilterAccountId('all');
+    setFilterCategoryId('all');
+    setFilterSubcategoryId('all');
+    setFilterDescription('');
+  };
+
+  const hasActiveFilters = filterMonth || filterType !== 'all' || filterAccountId !== 'all' || filterCategoryId !== 'all' || filterSubcategoryId !== 'all' || filterDescription.trim();
+
+  // Filter subcategories based on selected category
+  const filteredSubcategories = filterCategoryId !== 'all'
+    ? subcategories.filter(s => s.category_id === parseInt(filterCategoryId))
+    : subcategories;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-background">
@@ -273,10 +344,117 @@ export default function Transacoes() {
           </div>
         </div>
 
+        {/* Barra de Filtros */}
+        <Card className="mb-4">
+          <CardContent className="pt-4 pb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3 items-end">
+              {/* Mês de Referência */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Mês de Referência</label>
+                <MonthYearPicker
+                  value={filterMonth || undefined}
+                  onValueChange={(val) => setFilterMonth(val)}
+                  placeholder="Todos os meses"
+                  className="h-9 text-sm"
+                />
+              </div>
+
+              {/* Tipo */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Tipo</label>
+                <Select value={filterType} onValueChange={setFilterType}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Todos" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todos</SelectItem>
+                    <SelectItem value="Income">Receita</SelectItem>
+                    <SelectItem value="Expense">Despesa</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Conta */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Conta</label>
+                <Select value={filterAccountId} onValueChange={setFilterAccountId}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {accounts.map(a => (
+                      <SelectItem key={a.id} value={a.id.toString()}>{a.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Categoria */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Categoria</label>
+                <Select value={filterCategoryId} onValueChange={(val) => {
+                  setFilterCategoryId(val);
+                  setFilterSubcategoryId('all');
+                }}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {categories.map(c => (
+                      <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Subcategoria */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Subcategoria</label>
+                <Select value={filterSubcategoryId} onValueChange={setFilterSubcategoryId}>
+                  <SelectTrigger className="h-9 text-sm">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {filteredSubcategories.map(s => (
+                      <SelectItem key={s.id} value={s.id.toString()}>{s.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Busca por descrição */}
+              <div className="space-y-1">
+                <label className="text-xs font-medium text-muted-foreground">Descrição</label>
+                <div className="relative">
+                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Buscar..."
+                    value={filterDescription}
+                    onChange={(e) => setFilterDescription(e.target.value)}
+                    className="h-9 text-sm pl-8"
+                  />
+                </div>
+              </div>
+            </div>
+
+            {hasActiveFilters && (
+              <div className="mt-3 flex justify-end">
+                <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1 text-muted-foreground">
+                  <X className="h-4 w-4" />
+                  Limpar filtros
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
         {/* Lista de Transações */}
         <Card>
           <CardHeader>
-            <CardTitle>Lista de Transações</CardTitle>
+            <CardTitle>Lista de Transações ({transactions.length})</CardTitle>
           </CardHeader>
           <CardContent>
             {transactions.length > 0 ? (
@@ -426,7 +604,7 @@ export default function Transacoes() {
               </Table>
             ) : (
               <div className="text-center py-8 text-muted-foreground">
-                Nenhuma transação cadastrada ainda.
+                {hasActiveFilters ? 'Nenhuma transação encontrada com os filtros selecionados.' : 'Nenhuma transação cadastrada ainda.'}
               </div>
             )}
           </CardContent>
