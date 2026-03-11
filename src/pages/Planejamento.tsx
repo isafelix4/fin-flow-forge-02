@@ -522,11 +522,22 @@ const Planejamento = () => {
                 {format(new Date(referenceMonth + 'T12:00:00'), 'MMMM yyyy', { locale: ptBR })}
               </p>
             </div>
-            <MonthYearPicker
-              value={referenceMonth}
-              onValueChange={setReferenceMonth}
-              placeholder="Selecionar período"
-            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCopyModal(true)}
+                className="gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Copiar de outro mês
+              </Button>
+              <MonthYearPicker
+                value={referenceMonth}
+                onValueChange={setReferenceMonth}
+                placeholder="Selecionar período"
+              />
+            </div>
           </div>
 
           {/* Barra de Ações - Salvar/Cancelar */}
