@@ -12,8 +12,15 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Trash2, Save, X, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Save, X, Loader2, Copy } from 'lucide-react';
 import { ImprovedAddBudgetModal } from '@/components/ImprovedAddBudgetModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface Category {
   id: number;
