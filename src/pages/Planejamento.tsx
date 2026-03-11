@@ -70,6 +70,9 @@ const Planejamento = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copySourceMonth, setCopySourceMonth] = useState<string>('');
+  const [isCopying, setIsCopying] = useState(false);
   const [modalPlanType, setModalPlanType] = useState<'RECEITA' | 'DESPESA'>('RECEITA');
 
   // Detecta se há alterações não salvas
