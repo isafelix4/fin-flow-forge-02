@@ -335,6 +335,69 @@ const Planejamento = () => {
     });
   }, [budgets, toast]);
 
+  // Copiar planejamento de outro mês
+  const handleCopyFromMonth = useCallback(async () => {
+    if (!user || !copySourceMonth) return;
+
+    try {
+      setIsCopying(true);
+
+      // Buscar budgets do mês de origem
+      const { data: sourceBudgets, error: fetchError } = await supabase
+        .from('budgets')
+        .select('category_id, subcategory_id, planned_amount, plan_type')
+        .eq('user_id', user.id)
+        .eq('reference_month', copySourceMonth);
+
+      if (fetchError) throw fetchError;
+
+      if (!sourceBudgets || sourceBudgets.length === 0) {
+        toast({
+          title: "Aviso",
+          description: "Não há itens de planejamento no mês selecionado.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Preparar payload para upsert no mês de destino
+      const payload = sourceBudgets.map(b => ({
+        user_id: user.id,
+        reference_month: referenceMonth,
+        category_id: b.category_id,
+        subcategory_id: b.subcategory_id,
+        planned_amount: b.planned_amount,
+        plan_type: b.plan_type,
+      }));
+
+      const { error: upsertError } = await supabase
+        .from('budgets')
+        .upsert(payload, {
+          onConflict: 'user_id,reference_month,category_id,subcategory_id',
+        });
+
+      if (upsertError) throw upsertError;
+
+      toast({
+        title: "Sucesso",
+        description: `${sourceBudgets.length} item(ns) copiado(s) para o mês atual.`,
+      });
+
+      setShowCopyModal(false);
+      setCopySourceMonth('');
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao copiar planejamento:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível copiar o planejamento.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCopying(false);
+    }
+  }, [user, copySourceMonth, referenceMonth, toast, loadData]);
+
   const getRealizedValue = (transactionType: 'Income' | 'Expense', categoryId: number, subcategoryId: number | null = null) => {
     const summary = transactionSummaries.find(t => 
       t.transaction_type === transactionType && 
