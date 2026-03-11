@@ -12,8 +12,15 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Plus, Trash2, Save, X, Loader2 } from 'lucide-react';
+import { Plus, Trash2, Save, X, Loader2, Copy } from 'lucide-react';
 import { ImprovedAddBudgetModal } from '@/components/ImprovedAddBudgetModal';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
 
 interface Category {
   id: number;
@@ -63,6 +70,9 @@ const Planejamento = () => {
   const [loading, setLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copySourceMonth, setCopySourceMonth] = useState<string>('');
+  const [isCopying, setIsCopying] = useState(false);
   const [modalPlanType, setModalPlanType] = useState<'RECEITA' | 'DESPESA'>('RECEITA');
 
   // Detecta se há alterações não salvas
@@ -325,6 +335,69 @@ const Planejamento = () => {
     });
   }, [budgets, toast]);
 
+  // Copiar planejamento de outro mês
+  const handleCopyFromMonth = useCallback(async () => {
+    if (!user || !copySourceMonth) return;
+
+    try {
+      setIsCopying(true);
+
+      // Buscar budgets do mês de origem
+      const { data: sourceBudgets, error: fetchError } = await supabase
+        .from('budgets')
+        .select('category_id, subcategory_id, planned_amount, plan_type')
+        .eq('user_id', user.id)
+        .eq('reference_month', copySourceMonth);
+
+      if (fetchError) throw fetchError;
+
+      if (!sourceBudgets || sourceBudgets.length === 0) {
+        toast({
+          title: "Aviso",
+          description: "Não há itens de planejamento no mês selecionado.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Preparar payload para upsert no mês de destino
+      const payload = sourceBudgets.map(b => ({
+        user_id: user.id,
+        reference_month: referenceMonth,
+        category_id: b.category_id,
+        subcategory_id: b.subcategory_id,
+        planned_amount: b.planned_amount,
+        plan_type: b.plan_type,
+      }));
+
+      const { error: upsertError } = await supabase
+        .from('budgets')
+        .upsert(payload, {
+          onConflict: 'user_id,reference_month,category_id,subcategory_id',
+        });
+
+      if (upsertError) throw upsertError;
+
+      toast({
+        title: "Sucesso",
+        description: `${sourceBudgets.length} item(ns) copiado(s) para o mês atual.`,
+      });
+
+      setShowCopyModal(false);
+      setCopySourceMonth('');
+      await loadData();
+    } catch (error) {
+      console.error('Erro ao copiar planejamento:', error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível copiar o planejamento.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCopying(false);
+    }
+  }, [user, copySourceMonth, referenceMonth, toast, loadData]);
+
   const getRealizedValue = (transactionType: 'Income' | 'Expense', categoryId: number, subcategoryId: number | null = null) => {
     const summary = transactionSummaries.find(t => 
       t.transaction_type === transactionType && 
@@ -449,11 +522,22 @@ const Planejamento = () => {
                 {format(new Date(referenceMonth + 'T12:00:00'), 'MMMM yyyy', { locale: ptBR })}
               </p>
             </div>
-            <MonthYearPicker
-              value={referenceMonth}
-              onValueChange={setReferenceMonth}
-              placeholder="Selecionar período"
-            />
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowCopyModal(true)}
+                className="gap-2"
+              >
+                <Copy className="h-4 w-4" />
+                Copiar de outro mês
+              </Button>
+              <MonthYearPicker
+                value={referenceMonth}
+                onValueChange={setReferenceMonth}
+                placeholder="Selecionar período"
+              />
+            </div>
           </div>
 
           {/* Barra de Ações - Salvar/Cancelar */}
@@ -632,6 +716,42 @@ const Planejamento = () => {
         existingBudgets={localBudgets}
         categories={categories}
       />
+
+      {/* Modal Copiar de Outro Mês */}
+      <Dialog open={showCopyModal} onOpenChange={(open) => {
+        setShowCopyModal(open);
+        if (!open) setCopySourceMonth('');
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Copiar planejamento de outro mês</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Selecione o mês de origem. Os itens serão copiados para{' '}
+              <strong>{format(new Date(referenceMonth + 'T12:00:00'), 'MMMM yyyy', { locale: ptBR })}</strong>.
+            </p>
+            <MonthYearPicker
+              value={copySourceMonth}
+              onValueChange={setCopySourceMonth}
+              placeholder="Selecionar mês de origem"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCopyModal(false)} disabled={isCopying}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCopyFromMonth} disabled={!copySourceMonth || isCopying}>
+              {isCopying ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Copy className="h-4 w-4 mr-2" />
+              )}
+              Copiar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
