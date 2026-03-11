@@ -716,6 +716,42 @@ const Planejamento = () => {
         existingBudgets={localBudgets}
         categories={categories}
       />
+
+      {/* Modal Copiar de Outro Mês */}
+      <Dialog open={showCopyModal} onOpenChange={(open) => {
+        setShowCopyModal(open);
+        if (!open) setCopySourceMonth('');
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Copiar planejamento de outro mês</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <p className="text-sm text-muted-foreground mb-4">
+              Selecione o mês de origem. Os itens serão copiados para{' '}
+              <strong>{format(new Date(referenceMonth + 'T12:00:00'), 'MMMM yyyy', { locale: ptBR })}</strong>.
+            </p>
+            <MonthYearPicker
+              value={copySourceMonth}
+              onValueChange={setCopySourceMonth}
+              placeholder="Selecionar mês de origem"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCopyModal(false)} disabled={isCopying}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCopyFromMonth} disabled={!copySourceMonth || isCopying}>
+              {isCopying ? (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              ) : (
+                <Copy className="h-4 w-4 mr-2" />
+              )}
+              Copiar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
