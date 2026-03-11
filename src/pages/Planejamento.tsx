@@ -431,7 +431,11 @@ const Planejamento = () => {
 
     return filteredBudgets.map(budget => {
       const realizedValue = getRealizedValue(transactionType, budget.category_id, budget.subcategory_id);
-      const remainingValue = Number(budget.planned_amount) - realizedValue;
+      // Para receitas: positivo quando realizado > planejado (recebeu mais que o esperado)
+      // Para despesas: positivo quando planejado > realizado (gastou menos que o esperado)
+      const remainingValue = planType === 'RECEITA'
+        ? realizedValue - Number(budget.planned_amount)
+        : Number(budget.planned_amount) - realizedValue;
       const progressPercentage = budget.planned_amount > 0 
         ? Math.min((realizedValue / Number(budget.planned_amount)) * 100, 100) 
         : 0;
