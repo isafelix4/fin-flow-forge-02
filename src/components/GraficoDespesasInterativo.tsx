@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, ReferenceLine, LabelList, Cell } from 'recharts';
+import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { BarChart, Bar, XAxis, YAxis, ResponsiveContainer, LabelList, Cell } from 'recharts';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft } from 'lucide-react';
 
@@ -10,7 +10,6 @@ interface CategoryData {
   name: string;
   amount: number;
   type: 'Standard' | 'Debt' | 'Investment';
-  average?: number;
 }
 
 interface SubcategoryData {
@@ -27,20 +26,13 @@ interface ExpenseData {
   amount: number;
 }
 
-interface CategoryAverage {
-  [categoryId: number]: {
-    name: string;
-    average: number;
-  };
-}
-
 interface GraficoDespesasInterativoProps {
   loading: boolean;
   expenseData: ExpenseData[];
-  categoryAverages: CategoryAverage;
+  previousMonthExpenseData: ExpenseData[];
 }
 
-const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: GraficoDespesasInterativoProps) => {
+const GraficoDespesasInterativo = ({ loading, expenseData, previousMonthExpenseData }: GraficoDespesasInterativoProps) => {
   const [viewMode, setViewMode] = useState<'categories' | 'subcategories'>('categories');
   const [selectedCategory, setSelectedCategory] = useState<CategoryData | null>(null);
   const [categoryData, setCategoryData] = useState<CategoryData[]>([]);
@@ -60,23 +52,33 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
     },
   };
 
-  // High contrast colors for Standard categories (avoiding red/green tones)
   const STANDARD_COLORS = ['#2563eb', '#7c3aed', '#db2777', '#ea580c', '#0891b2', '#4338ca', '#be185d', '#c2410c', '#0e7490', '#6366f1'];
-  
-  // Reserved colors for special category types
-  const DEBT_COLOR = '#dc2626'; // Red
-  const INVESTMENT_COLOR = '#16a34a'; // Green
+  const DEBT_COLOR = '#dc2626';
+  const INVESTMENT_COLOR = '#16a34a';
 
-  const calculateVariation = (current: number, average: number) => {
-    if (average === 0) return { percentage: 0, isIncrease: false };
-    const percentage = ((current - average) / average) * 100;
-    return { percentage: Math.abs(percentage), isIncrease: current > average };
-  };
+  // Lookup maps for previous month data
+  const previousByCategoryMap = useMemo(() => {
+    const map = new Map<number, number>();
+    previousMonthExpenseData.forEach(e => {
+      map.set(e.categoryId, (map.get(e.categoryId) || 0) + e.amount);
+    });
+    return map;
+  }, [previousMonthExpenseData]);
+
+  const previousBySubcategoryMap = useMemo(() => {
+    const map = new Map<string, number>();
+    if (!selectedCategory) return map;
+    previousMonthExpenseData
+      .filter(e => e.categoryId === selectedCategory.id && e.subcategoryName)
+      .forEach(e => {
+        map.set(e.subcategoryName!, (map.get(e.subcategoryName!) || 0) + e.amount);
+      });
+    return map;
+  }, [previousMonthExpenseData, selectedCategory]);
 
   const processExpenseData = () => {
     if (!expenseData) return;
 
-    // Group by category
     const categoryMap = new Map<number, { name: string, amount: number, type: 'Standard' | 'Debt' | 'Investment' }>();
     
     expenseData.forEach(expense => {
@@ -98,7 +100,6 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
         name: data.name,
         amount: data.amount,
         type: data.type,
-        average: categoryAverages[id]?.average || 0
       }))
       .sort((a, b) => b.amount - a.amount);
 
@@ -108,7 +109,6 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
   const loadSubcategoriesData = (categoryId: number) => {
     if (!expenseData) return;
 
-    // Group by subcategory for the selected category
     const subcategoryMap = new Map<string, number>();
     
     expenseData
@@ -120,10 +120,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
       });
 
     const subcategories = Array.from(subcategoryMap.entries())
-      .map(([name, amount]) => ({
-        name,
-        amount
-      }))
+      .map(([name, amount]) => ({ name, amount }))
       .sort((a, b) => b.amount - a.amount);
 
     setSubcategoryData(subcategories);
@@ -150,15 +147,36 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
     setSubcategoryData([]);
   };
 
-  // Process expense data when it changes
   useEffect(() => {
     processExpenseData();
-  }, [expenseData, categoryAverages]);
+  }, [expenseData]);
 
-  // Reset to categories view when expense data changes
   useEffect(() => {
     handleBackToCategories();
   }, [expenseData]);
+
+  const renderVariation = (current: number, previous: number | undefined) => {
+    if (previous === undefined || previous === 0) {
+      return (
+        <p className="text-xs text-muted-foreground">Mês anterior: Sem dados</p>
+      );
+    }
+    const percentage = ((current - previous) / previous) * 100;
+    const isIncrease = percentage > 0;
+    const colorClass = isIncrease ? 'text-destructive' : 'text-green-600';
+    const sign = isIncrease ? '+' : '';
+
+    return (
+      <>
+        <p className="text-xs text-muted-foreground">
+          Mês anterior: {formatCurrency(previous)}
+        </p>
+        <p className={`text-xs font-semibold ${colorClass}`}>
+          Variação: {sign}{percentage.toFixed(1)}%
+        </p>
+      </>
+    );
+  };
 
   const currentData = viewMode === 'categories' ? categoryData : subcategoryData;
   const isEmpty = currentData.length === 0;
@@ -223,21 +241,33 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                       const data = payload[0].payload;
                       const value = payload[0].value as number;
 
+                      let previousValue: number | undefined;
+                      if (viewMode === 'categories') {
+                        previousValue = previousByCategoryMap.get(data.id);
+                      } else {
+                        previousValue = previousBySubcategoryMap.get(data.name);
+                      }
+
+                      const percentage = previousValue && previousValue > 0
+                        ? ((value - previousValue) / previousValue) * 100
+                        : undefined;
+                      const sign = percentage !== undefined && percentage > 0 ? '+' : '';
+                      const variationColor = percentage !== undefined
+                        ? (percentage > 0 ? 'text-destructive' : 'text-green-600')
+                        : '';
+
                       return (
                         <div className="bg-background border border-border rounded-lg p-3 shadow-lg text-sm">
                           <p className="font-bold mb-1">{label}</p>
-                          <p className="text-primary">Valor do Mês: {formatCurrency(value)}</p>
-                          {viewMode === 'categories' && data.average > 0 && (
-                            <>
-                              <p className="text-xs text-muted-foreground">Média (3m): {formatCurrency(data.average)}</p>
-                              <p className={`text-xs font-semibold ${value > data.average ? 'text-red-500' : 'text-green-500'}`}>
-                                Variação: {(() => {
-                                  const variation = calculateVariation(value, data.average);
-                                  return `${variation.isIncrease ? '+' : '-'}${variation.percentage.toFixed(1)}%`;
-                                })()}
-                              </p>
-                            </>
-                          )}
+                          <p className="text-primary">
+                            Mês atual: {formatCurrency(value)}
+                            {percentage !== undefined && (
+                              <span className={`ml-1 ${variationColor}`}>
+                                ({sign}{percentage.toFixed(1)}%)
+                              </span>
+                            )}
+                          </p>
+                          {renderVariation(value, previousValue)}
                         </div>
                       );
                     }
@@ -265,17 +295,6 @@ const GraficoDespesasInterativo = ({ loading, expenseData, categoryAverages }: G
                     fontSize={12}
                   />
                 </Bar>
-                {viewMode === 'categories' && categoryData.map((cat) => (
-                  cat.average > 0 && (
-                    <ReferenceLine
-                      key={`avg-${cat.id}`}
-                      y={cat.average}
-                      stroke="hsl(var(--muted-foreground))"
-                      strokeDasharray="3 3"
-                      strokeWidth={1}
-                    />
-                  )
-                ))}
               </BarChart>
             </ResponsiveContainer>
           </ChartContainer>
