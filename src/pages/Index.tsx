@@ -108,7 +108,7 @@ const Index = () => {
               name,
               type
             ),
-            subcategories (
+            subcategories!transactions_subcategory_id_fkey (
               id,
               name
             )
