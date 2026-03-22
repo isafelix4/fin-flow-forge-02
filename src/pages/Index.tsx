@@ -91,7 +91,7 @@ const Index = () => {
               name,
               type
             ),
-            subcategories (
+            subcategories!transactions_subcategory_id_fkey (
               id,
               name
             )
@@ -108,7 +108,7 @@ const Index = () => {
               name,
               type
             ),
-            subcategories (
+            subcategories!transactions_subcategory_id_fkey (
               id,
               name
             )
@@ -129,6 +129,9 @@ const Index = () => {
           variant: "destructive"
         });
         return;
+      }
+      if (historicalTransactionsResponse.error) {
+        console.error('Error fetching historical transactions:', historicalTransactionsResponse.error);
       }
       const currentTransactions = currentTransactionsResponse.data || [];
       const historicalTransactions = historicalTransactionsResponse.data || [];
