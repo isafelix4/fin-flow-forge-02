@@ -101,11 +101,16 @@ const Index = () => {
             amount,
             type,
             category_id,
+            subcategory_id,
             reference_month,
             categories (
               id,
               name,
               type
+            ),
+            subcategories (
+              id,
+              name
             )
           `).eq('user_id', user.id).in('reference_month', previousMonths),
       // Investments for net worth
