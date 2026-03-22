@@ -1,107 +1,35 @@
 
 
-## Plano: Variação vs mês anterior no tooltip do gráfico de despesas
+## Plano: Corrigir dados do mês anterior no tooltip do gráfico de despesas
 
-### Resumo
-Substituir a média de 3 meses no tooltip do gráfico por comparação direta com o mês anterior. Aplica-se tanto a categorias quanto subcategorias.
+### Diagnóstico
 
-**Tooltip final:**
-```text
-Nome da Categoria
-Mês atual: R$1.000,00 (+33,3%)
-Mês anterior: R$750,00
-```
+O console log mostra `Total de transações históricas: 0`, porém existem **664 transações** no banco para os 3 meses anteriores. Isso indica que a query de transações históricas está falhando silenciosamente.
 
-### Nenhuma alteração de banco necessária
+**Causa raiz**: Na linha 134 de `Index.tsx`, o código faz `historicalTransactionsResponse.data || []` sem verificar `historicalTransactionsResponse.error`. Se a query retorna erro, `data` é `null` e vira `[]` silenciosamente.
 
-### Alterações
+A query provavelmente falha porque o PostgREST não consegue resolver a relação `subcategories` no join embutido (não há foreign key explícita definida entre `transactions.subcategory_id` e `subcategories.id` no schema visível).
 
-**Arquivo 1: `src/pages/Index.tsx`**
+### Correção
 
-1. Adicionar `subcategory_id` e `subcategories(id, name)` à query de transações históricas (linha 99-109) para ter dados de subcategoria do mês anterior.
+**Arquivo: `src/pages/Index.tsx`**
 
-2. Após processar `historicalTransactions` (após linha 276), extrair as transações do mês imediatamente anterior (`previousMonths[0]`) e montar um array `previousMonthExpenseData: ExpenseData[]`:
-```ts
-const previousMonthExpenses: ExpenseData[] = historicalTransactions
-  .filter(t => t.reference_month === previousMonths[0] && t.type === 'Expense' && t.categories)
-  .map(t => ({
-    categoryId: t.categories!.id,
-    categoryName: t.categories!.name,
-    categoryType: t.categories!.type as 'Standard' | 'Debt' | 'Investment',
-    subcategoryId: t.subcategory_id || undefined,
-    subcategoryName: t.subcategories?.name || undefined,
-    amount: Number(t.amount)
-  }));
-```
+1. **Adicionar log de erro** para `historicalTransactionsResponse` logo após a verificação do `currentTransactionsResponse` (após linha 132), para diagnosticar o erro exato.
 
-3. Criar novo state `previousMonthExpenseData` (junto aos outros states, linha 72):
-```ts
-const [previousMonthExpenseData, setPreviousMonthExpenseData] = useState<ExpenseData[]>([]);
-```
+2. **Corrigir a query histórica** — usar uma abordagem em 2 passos:
+   - Buscar as transações históricas **sem** o join de `subcategories` (apenas `categories`), que já funcionava antes.
+   - Para as transações do mês anterior (`previousMonths[0]`), buscar os nomes das subcategorias separadamente usando o `subcategory_id` já presente, ou fazer um join manual com uma query separada à tabela `subcategories`.
+   
+   **Alternativa mais simples** (preferida): Especificar a relação explicitamente no select usando a sintaxe `subcategories!subcategory_id(id, name)` para resolver a ambiguidade do PostgREST. Se isso também falhar, remover o join de `subcategories` da query histórica e buscar os nomes de subcategoria via lookup separado.
 
-4. Setar o state após calcular (junto ao `setCurrentExpenseData`):
-```ts
-setPreviousMonthExpenseData(previousMonthExpenses);
-```
-
-5. Atualizar a chamada do componente (linha 499) para passar a nova prop e remover `categoryAverages`:
-```tsx
-<GraficoDespesasInterativo 
-  loading={loading} 
-  expenseData={currentExpenseData} 
-  previousMonthExpenseData={previousMonthExpenseData} 
-/>
-```
-
-6. O state `categoryAverages` e toda a lógica de cálculo de médias por categoria (linhas 211-261, 296) podem ser mantidos pois são usados em outros contextos (ou removidos se não forem usados em mais nenhum lugar — verificar antes).
-
----
-
-**Arquivo 2: `src/components/GraficoDespesasInterativo.tsx`**
-
-1. **Props**: substituir `categoryAverages: CategoryAverage` por `previousMonthExpenseData: ExpenseData[]`. Remover interface `CategoryAverage`.
-
-2. **useMemo para lookup do mês anterior por categoria:**
-```ts
-const previousByCategoryMap = useMemo(() => {
-  const map = new Map<number, number>();
-  previousMonthExpenseData.forEach(e => {
-    map.set(e.categoryId, (map.get(e.categoryId) || 0) + e.amount);
-  });
-  return map;
-}, [previousMonthExpenseData]);
-```
-
-3. **useMemo para lookup do mês anterior por subcategoria** (filtrando pela categoria selecionada):
-```ts
-const previousBySubcategoryMap = useMemo(() => {
-  const map = new Map<string, number>();
-  if (!selectedCategory) return map;
-  previousMonthExpenseData
-    .filter(e => e.categoryId === selectedCategory.id && e.subcategoryName)
-    .forEach(e => {
-      map.set(e.subcategoryName!, (map.get(e.subcategoryName!) || 0) + e.amount);
-    });
-  return map;
-}, [previousMonthExpenseData, selectedCategory]);
-```
-
-4. **Remover** `average` do `CategoryData` interface e do `processExpenseData`.
-
-5. **Atualizar o tooltip** (linhas 220-245) para:
-   - View categorias: buscar `previousByCategoryMap.get(data.id)` 
-   - View subcategorias: buscar `previousBySubcategoryMap.get(data.name)`
-   - Calcular variação: `((atual - anterior) / anterior) * 100`
-   - Verde se gastou menos, vermelho se gastou mais
-   - "Mês anterior: Sem dados" se não houver valor anterior
-
-6. **Remover** as `ReferenceLine` de média (linhas 268-278).
-
-7. **Remover** `useEffect` dependency de `categoryAverages` (linha 156).
-
-8. Na view de categorias, adicionar campo `id` aos dados do chart para o tooltip poder fazer lookup. O `categoryData` já tem `id`, então basta garantir que o `data` do payload contenha o `id`.
+3. **Fallback robusto**: Se a query histórica falhar, logar o erro mas continuar o carregamento do dashboard normalmente (apenas sem dados de comparação).
 
 ### Arquivos modificados
-- `src/pages/Index.tsx`
-- `src/components/GraficoDespesasInterativo.tsx`
+- `src/pages/Index.tsx` — corrigir query histórica + adicionar tratamento de erro
+
+### Abordagem de implementação
+
+A correção será feita em dois passos:
+1. Adicionar `console.error` para o erro da query histórica para confirmar a causa exata
+2. Ajustar a query para resolver o problema (usar hint de FK ou separar a busca de subcategorias)
 
