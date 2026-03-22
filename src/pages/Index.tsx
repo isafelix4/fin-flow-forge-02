@@ -281,6 +281,18 @@ const Index = () => {
         amount: Number(t.amount)
       }));
 
+      // Prepare previous month expense data for chart comparison
+      const previousMonthExpenses: ExpenseData[] = historicalTransactions
+        .filter(t => t.reference_month === previousMonths[0] && t.type === 'Expense' && t.categories)
+        .map(t => ({
+          categoryId: t.categories!.id,
+          categoryName: t.categories!.name,
+          categoryType: t.categories!.type as 'Standard' | 'Debt' | 'Investment',
+          subcategoryId: t.subcategory_id || undefined,
+          subcategoryName: (t as any).subcategories?.name || undefined,
+          amount: Number(t.amount)
+        }));
+
       // Calculate net worth
       const totalInvestments = investmentsResponse.data?.reduce((sum, inv) => sum + Number(inv.current_balance), 0) || 0;
       const totalDebts = debtsResponse.data?.reduce((sum, debt) => sum + Number(debt.current_balance), 0) || 0;
@@ -301,6 +313,7 @@ const Index = () => {
       });
       setCategoryAverages(categoryAvgs);
       setCurrentExpenseData(expenseData);
+      setPreviousMonthExpenseData(previousMonthExpenses);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
       toast({
