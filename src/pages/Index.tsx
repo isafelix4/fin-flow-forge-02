@@ -130,6 +130,9 @@ const Index = () => {
         });
         return;
       }
+      if (historicalTransactionsResponse.error) {
+        console.error('Error fetching historical transactions:', historicalTransactionsResponse.error);
+      }
       const currentTransactions = currentTransactionsResponse.data || [];
       const historicalTransactions = historicalTransactionsResponse.data || [];
 
