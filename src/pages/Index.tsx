@@ -515,7 +515,7 @@ const Index = () => {
 
         {/* Charts Section */}
         <div className="w-full">
-          <GraficoDespesasInterativo loading={loading} expenseData={currentExpenseData} categoryAverages={categoryAverages} />
+          <GraficoDespesasInterativo loading={loading} expenseData={currentExpenseData} previousMonthExpenseData={previousMonthExpenseData} />
         </div>
       </main>
     </div>;
