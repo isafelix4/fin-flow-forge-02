@@ -70,6 +70,7 @@ const Index = () => {
   });
   const [categoryAverages, setCategoryAverages] = useState<CategoryAverage>({});
   const [currentExpenseData, setCurrentExpenseData] = useState<ExpenseData[]>([]);
+  const [previousMonthExpenseData, setPreviousMonthExpenseData] = useState<ExpenseData[]>([]);
   const loadDashboardData = async () => {
     if (!user) return;
     try {
