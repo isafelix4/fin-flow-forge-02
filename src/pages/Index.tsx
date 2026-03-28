@@ -74,8 +74,7 @@ const Index = () => {
     if (!user) return;
     try {
       setLoading(true);
-      const referenceDate = new Date(referenceMonth);
-      const previousMonths = [format(subMonths(referenceDate, 1), 'yyyy-MM-dd'), format(subMonths(referenceDate, 2), 'yyyy-MM-dd'), format(subMonths(referenceDate, 3), 'yyyy-MM-dd')];
+      const previousMonths = getPreviousReferenceMonths(referenceMonth, 3);
 
       // Parallel queries for current month and historical data
       const [currentTransactionsResponse, historicalTransactionsResponse, investmentsResponse, debtsResponse, historicalInvestmentsResponse, historicalDebtsResponse] = await Promise.all([
