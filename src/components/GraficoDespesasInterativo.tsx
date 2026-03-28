@@ -257,7 +257,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, previousMonthExpenseD
                               </span>
                             )}
                           </p>
-                          {renderVariation(value, previousValue)}
+                          {renderPreviousMonth(previousValue)}
                         </div>
                       );
                     }
