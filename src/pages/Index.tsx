@@ -7,8 +7,7 @@ import { MonthYearPicker } from '@/components/ui/month-year-picker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { format, startOfMonth, subMonths } from 'date-fns';
-import { ptBR } from 'date-fns/locale';
+import { getPreviousReferenceMonths, formatReferenceMonth } from '@/lib/referenceMonth';
 import { Link } from 'react-router-dom';
 import { Upload, TrendingUp, Filter, ArrowUp, ArrowDown, Equal } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -75,8 +74,7 @@ const Index = () => {
     if (!user) return;
     try {
       setLoading(true);
-      const referenceDate = new Date(referenceMonth);
-      const previousMonths = [format(subMonths(referenceDate, 1), 'yyyy-MM-dd'), format(subMonths(referenceDate, 2), 'yyyy-MM-dd'), format(subMonths(referenceDate, 3), 'yyyy-MM-dd')];
+      const previousMonths = getPreviousReferenceMonths(referenceMonth, 3);
 
       // Parallel queries for current month and historical data
       const [currentTransactionsResponse, historicalTransactionsResponse, investmentsResponse, debtsResponse, historicalInvestmentsResponse, historicalDebtsResponse] = await Promise.all([
@@ -381,11 +379,7 @@ const Index = () => {
     );
   };
   const getMonthName = () => {
-    const date = new Date(referenceMonth + 'T12:00:00');
-    return date.toLocaleDateString('pt-BR', { 
-      month: 'long', 
-      year: 'numeric' 
-    });
+    return formatReferenceMonth(referenceMonth);
   };
   return <div className="min-h-screen bg-background">
       <Header />
