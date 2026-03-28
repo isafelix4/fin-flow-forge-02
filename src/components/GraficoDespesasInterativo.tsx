@@ -155,26 +155,16 @@ const GraficoDespesasInterativo = ({ loading, expenseData, previousMonthExpenseD
     handleBackToCategories();
   }, [expenseData]);
 
-  const renderVariation = (current: number, previous: number | undefined) => {
+  const renderPreviousMonth = (previous: number | undefined) => {
     if (previous === undefined || previous === 0) {
       return (
         <p className="text-xs text-muted-foreground">Mês anterior: Sem dados</p>
       );
     }
-    const percentage = ((current - previous) / previous) * 100;
-    const isIncrease = percentage > 0;
-    const colorClass = isIncrease ? 'text-destructive' : 'text-green-600';
-    const sign = isIncrease ? '+' : '';
-
     return (
-      <>
-        <p className="text-xs text-muted-foreground">
-          Mês anterior: {formatCurrency(previous)}
-        </p>
-        <p className={`text-xs font-semibold ${colorClass}`}>
-          Variação: {sign}{percentage.toFixed(1)}%
-        </p>
-      </>
+      <p className="text-xs text-muted-foreground">
+        Mês anterior: {formatCurrency(previous)}
+      </p>
     );
   };
 
@@ -267,7 +257,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, previousMonthExpenseD
                               </span>
                             )}
                           </p>
-                          {renderVariation(value, previousValue)}
+                          {renderPreviousMonth(previousValue)}
                         </div>
                       );
                     }
