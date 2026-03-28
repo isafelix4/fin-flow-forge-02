@@ -379,11 +379,7 @@ const Index = () => {
     );
   };
   const getMonthName = () => {
-    const date = new Date(referenceMonth + 'T12:00:00');
-    return date.toLocaleDateString('pt-BR', { 
-      month: 'long', 
-      year: 'numeric' 
-    });
+    return formatReferenceMonth(referenceMonth);
   };
   return <div className="min-h-screen bg-background">
       <Header />

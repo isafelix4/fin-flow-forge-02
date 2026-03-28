@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Calendar, CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarIcon, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +14,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  parseReferenceMonth,
+  buildReferenceMonth,
+  formatReferenceMonth,
+} from "@/lib/referenceMonth";
 
 interface MonthYearPickerProps {
   value?: string;
@@ -30,14 +35,14 @@ export function MonthYearPicker({
 }: MonthYearPickerProps) {
   const [selectedYear, setSelectedYear] = React.useState<number>(() => {
     if (value) {
-      return new Date(value).getFullYear();
+      return parseReferenceMonth(value).year;
     }
     return new Date().getFullYear();
   });
 
   const [selectedMonth, setSelectedMonth] = React.useState<number>(() => {
     if (value) {
-      return new Date(value).getMonth();
+      return parseReferenceMonth(value).month;
     }
     return new Date().getMonth();
   });
@@ -54,23 +59,26 @@ export function MonthYearPicker({
   const years = Array.from({ length: 21 }, (_, i) => currentYear - 10 + i);
 
   const handleMonthYearSelect = (month: number, year: number) => {
-    const dateValue = new Date(year, month, 1).toISOString().slice(0, 7) + '-01';
+    const dateValue = buildReferenceMonth(year, month);
     onValueChange?.(dateValue);
     setSelectedMonth(month);
     setSelectedYear(year);
     setOpen(false);
   };
 
-  const formatDisplayValue = (value: string) => {
-    const date = new Date(value + 'T12:00:00');
-    return date.toLocaleDateString('pt-BR', { 
-      month: 'long', 
-      year: 'numeric' 
-    });
+  const formatDisplayValue = (val: string) => {
+    return formatReferenceMonth(val);
   };
 
   const navigateYear = (direction: 'prev' | 'next') => {
     setSelectedYear(prev => direction === 'prev' ? prev - 1 : prev + 1);
+  };
+
+  // Determine if a month button is "active" (matches current value)
+  const isMonthActive = (monthIndex: number): boolean => {
+    if (!value) return false;
+    const parsed = parseReferenceMonth(value);
+    return parsed.year === selectedYear && parsed.month === monthIndex;
   };
 
   return (
@@ -102,7 +110,7 @@ export function MonthYearPicker({
             </Button>
             <Select
               value={selectedYear.toString()}
-              onValueChange={(value) => setSelectedYear(parseInt(value))}
+              onValueChange={(v) => setSelectedYear(parseInt(v))}
             >
               <SelectTrigger className="w-[120px]">
                 <SelectValue />
@@ -130,13 +138,7 @@ export function MonthYearPicker({
             {months.map((month, index) => (
               <Button
                 key={month}
-                variant={
-                  selectedMonth === index && 
-                  selectedYear === (value ? new Date(value + 'T12:00:00').getFullYear() : new Date().getFullYear()) &&
-                  value && new Date(value + 'T12:00:00').getMonth() === index
-                    ? "default" 
-                    : "outline"
-                }
+                variant={isMonthActive(index) ? "default" : "outline"}
                 className="h-9 text-sm"
                 onClick={() => handleMonthYearSelect(index, selectedYear)}
               >
