@@ -243,7 +243,7 @@ const GraficoDespesasInterativo = ({ loading, expenseData, previousMonthExpenseD
                         : undefined;
                       const sign = percentage !== undefined && percentage > 0 ? '+' : '';
                       const variationColor = percentage !== undefined
-                        ? (percentage > 0 ? 'text-destructive' : 'text-green-600')
+                        ? (percentage > 0 ? 'text-green-600' : 'text-destructive')
                         : '';
 
                       return (
