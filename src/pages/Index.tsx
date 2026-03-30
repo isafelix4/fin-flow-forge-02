@@ -515,6 +515,13 @@ const Index = () => {
         <div className="w-full">
           <GraficoDespesasInterativo loading={loading} expenseData={currentExpenseData} previousMonthExpenseData={previousMonthExpenseData} />
         </div>
+
+        {/* Account Summary Section */}
+        {user && (
+          <div className="w-full">
+            <AccountSummaryTable referenceMonth={referenceMonth} userId={user.id} />
+          </div>
+        )}
       </main>
     </div>;
 };
