@@ -13,6 +13,7 @@ import { Upload, TrendingUp, Filter, ArrowUp, ArrowDown, Equal } from 'lucide-re
 import { Button } from '@/components/ui/button';
 import GraficoDespesasInterativo from '@/components/GraficoDespesasInterativo';
 import { InsightsCard } from '@/components/InsightsCard';
+import AccountSummaryTable from '@/components/AccountSummaryTable';
 interface DashboardData {
   income: number;
   expenses: number;
