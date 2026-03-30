@@ -14,6 +14,33 @@ export type Database = {
   }
   public: {
     Tables: {
+      account_balances: {
+        Row: {
+          account_id: number
+          created_at: string
+          id: number
+          reference_month: string
+          residual_balance: number
+          user_id: string
+        }
+        Insert: {
+          account_id: number
+          created_at?: string
+          id?: never
+          reference_month: string
+          residual_balance?: number
+          user_id: string
+        }
+        Update: {
+          account_id?: number
+          created_at?: string
+          id?: never
+          reference_month?: string
+          residual_balance?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       accounts: {
         Row: {
           created_at: string
