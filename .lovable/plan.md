@@ -1,109 +1,58 @@
 
-## Plano de correção
 
-### Diagnóstico
-O problema principal não está no tooltip em si, nem no join de categorias/subcategorias: ele está na geração dos meses anteriores em `src/pages/Index.tsx`.
+## Plano: Tabela Resumo por Conta na aba Início
 
-Hoje o código faz:
-```ts
-const referenceDate = new Date(referenceMonth);
-const previousMonths = [
-  format(subMonths(referenceDate, 1), 'yyyy-MM-dd'),
-  ...
-];
+### Posicionamento
+A tabela será renderizada **após o gráfico de despesas** (linha 516), como última seção do dashboard.
+
+### Alteração de banco necessária
+
+Nova tabela `account_balances` para persistir o saldo residual editável:
+
+```sql
+CREATE TABLE public.account_balances (
+  id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  user_id uuid NOT NULL,
+  account_id bigint NOT NULL,
+  reference_month date NOT NULL,
+  residual_balance numeric NOT NULL DEFAULT 0,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (user_id, account_id, reference_month)
+);
+
+ALTER TABLE public.account_balances ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own account_balances" ON public.account_balances
+  FOR SELECT TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own account_balances" ON public.account_balances
+  FOR INSERT TO authenticated WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own account_balances" ON public.account_balances
+  FOR UPDATE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own account_balances" ON public.account_balances
+  FOR DELETE TO authenticated USING (auth.uid() = user_id);
+CREATE POLICY "Deny anonymous access to account_balances" ON public.account_balances
+  FOR ALL TO anon USING (false);
 ```
 
-Como `referenceMonth` é uma string ISO (`yyyy-MM-dd`), `new Date('2026-03-01')` sofre conversão de timezone. Pelos logs, isso já está acontecendo:
+### Arquivos
 
-```text
-Mês de referência: 2026-03-01
-3 meses anteriores: ["2026-01-28", "2025-12-28", "2025-11-28"]
-```
+#### 1. Novo: `src/components/AccountSummaryTable.tsx`
+- **Props**: `referenceMonth: string`, `userId: string`
+- **Dados**: busca `accounts`, `account_balances` (mês atual), e `transactions` do mês atual — tudo com queries independentes ao Supabase
+- **Colunas**:
+  1. **Conta** — nome da conta
+  2. **Saldo Residual** — campo editável (Input); pré-preenchido com `account_balances` do mês atual; se não existir, calcula saldo do mês anterior (entradas - saídas + residual anterior); upsert ao perder foco/Enter com `onConflict: 'user_id,account_id,reference_month'`
+  3. **Entradas** — `SUM(amount)` de transações `type = 'Income'` da conta no mês
+  4. **Saídas** — `SUM(amount)` de transações `type = 'Expense'` da conta no mês
+  5. **Saldo do Mês** — Entradas - Saídas + Saldo Residual
+- **Features**: filtro por nome da conta, ordenação por clique nos cabeçalhos, toast de sucesso/erro ao salvar residual
+- **Usa helpers de `src/lib/referenceMonth.ts`** para calcular mês anterior (sem risco de timezone)
 
-Ou seja:
-- o sistema deveria buscar `2026-02-01`, `2026-01-01`, `2025-12-01`
-- mas está buscando datas inválidas para `reference_month`
+#### 2. Edição mínima: `src/pages/Index.tsx`
+- Importar `AccountSummaryTable`
+- Renderizar após a `div` do gráfico (linha 516), passando `referenceMonth` e `user.id`
+- **Zero alteração** na lógica existente de KPIs, gráfico, insights ou dados do dashboard
 
-Resultado:
-- a query histórica `.in('reference_month', previousMonths)` não encontra linhas
-- `historicalTransactions` fica vazio
-- `previousMonthExpenseData` fica vazio
-- o tooltip de categorias e subcategorias sempre cai em “Mês anterior: Sem dados”
+### Impacto em outras telas
+Nenhum. A tabela `account_balances` é nova, o componente é isolado, e a integração no Index é apenas um import + render.
 
-As subcategorias não têm um bug separado: elas apenas herdam esse array vazio.
-
-### Melhor forma de corrigir
-A correção mais eficiente é parar de usar `Date`/UTC para lógica de `reference_month` e tratar mês de referência como string de domínio (`yyyy-MM-01`).
-
-### Alterações propostas
-
-#### 1. Corrigir a geração dos meses anteriores em `src/pages/Index.tsx`
-Substituir a lógica baseada em:
-- `new Date(referenceMonth)`
-- `subMonths(referenceDate, ...)`
-- `format(..., 'yyyy-MM-dd')`
-
-por uma lógica segura para `reference_month`, por exemplo:
-- helper string-based para deslocar mês (`yyyy-MM-01` -> mês anterior)
-- ou parsing seguro sem UTC implícito
-
-Objetivo: garantir que o array histórico fique assim:
-```text
-['2026-02-01', '2026-01-01', '2025-12-01']
-```
-
-#### 2. Centralizar helpers de mês de referência
-Criar um pequeno utilitário reutilizável para:
-- normalizar `reference_month`
-- obter meses anteriores
-- evitar repetição de lógica vulnerável a timezone
-
-Exemplo de responsabilidade desse helper:
-- `shiftReferenceMonth(referenceMonth, -1)`
-- `getPreviousReferenceMonths(referenceMonth, 3)`
-
-Isso reduz o risco de o mesmo bug voltar em outros pontos do app.
-
-#### 3. Ajustar `src/components/ui/month-year-picker.tsx`
-Esse componente ainda usa padrões inseguros para mês de referência:
-- `new Date(value).getFullYear()`
-- `new Date(value).getMonth()`
-- `new Date(year, month, 1).toISOString().slice(0, 7) + '-01'`
-
-Esses trechos também podem gerar deslocamentos de mês dependendo do fuso.
-
-Plano:
-- extrair ano e mês diretamente da string `yyyy-MM-dd`
-- montar o valor selecionado manualmente como string `yyyy-MM-01`
-- manter parsing com horário neutro apenas para exibição formatada, se necessário
-
-Isso evita regressões visuais e garante consistência com a Home.
-
-### Arquivos envolvidos
-- `src/pages/Index.tsx` — corrigir cálculo de `previousMonths` e manter `previousMonthExpenseData` consistente
-- `src/components/ui/month-year-picker.tsx` — eliminar parsing/serialização com risco de timezone
-- opcional: novo utilitário compartilhado, por exemplo `src/lib/referenceMonth.ts`
-
-### Validação após a correção
-Validar estes cenários:
-1. Selecionando `2026-03-01`, os meses anteriores calculados devem ser:
-   - `2026-02-01`
-   - `2026-01-01`
-   - `2025-12-01`
-2. `historicalTransactions.length` deve voltar a ter dados
-3. `previousMonthExpenseData.length` deve ser maior que zero quando houver despesas no mês anterior
-4. Tooltip de categoria deve mostrar:
-   - mês atual
-   - % de variação
-   - valor absoluto do mês anterior
-5. Tooltip de subcategoria deve mostrar a mesma lógica corretamente
-
-### Resultado esperado
-Depois da correção:
-- categorias e subcategorias passam a encontrar o mês anterior real
-- o tooltip deixa de mostrar “Sem dados” indevidamente
-- a lógica de `reference_month` fica estável e independente de timezone
-- o app reduz o risco de bugs semelhantes em filtros mensais e comparações históricas futuras
-
-### Observação sobre banco
-Nenhuma alteração em tables ou migrations é necessária. O problema é de frontend/data handling, não de schema.
