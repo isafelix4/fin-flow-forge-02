@@ -178,6 +178,8 @@ const Index = () => {
         const monthData = historicalByMonth.get(month)!;
         const amount = Number(t.amount);
         
+        if (t.categories?.type === 'Transfer') return;
+        
         if (t.type === 'Income') {
           monthData.income += amount;
         } else if (t.type === 'Expense') {
