@@ -141,8 +141,8 @@ const Index = () => {
       console.log('Total de transações históricas:', historicalTransactions.length);
 
       // Calculate current month totals
-      const income = currentTransactions.filter(t => t.type === 'Income').reduce((sum, t) => sum + Number(t.amount), 0);
-      const expenses = currentTransactions.filter(t => t.type === 'Expense').reduce((sum, t) => sum + Number(t.amount), 0);
+      const income = currentTransactions.filter(t => t.type === 'Income' && t.categories?.type !== 'Transfer').reduce((sum, t) => sum + Number(t.amount), 0);
+      const expenses = currentTransactions.filter(t => t.type === 'Expense' && t.categories?.type !== 'Transfer').reduce((sum, t) => sum + Number(t.amount), 0);
       const debtPayments = currentTransactions.filter(t => t.type === 'Expense' && t.categories?.type === 'Debt').reduce((sum, t) => sum + Number(t.amount), 0);
       const investmentContributions = currentTransactions.filter(t => t.type === 'Expense' && t.categories?.type === 'Investment').reduce((sum, t) => sum + Number(t.amount), 0);
 
@@ -177,6 +177,8 @@ const Index = () => {
         
         const monthData = historicalByMonth.get(month)!;
         const amount = Number(t.amount);
+        
+        if (t.categories?.type === 'Transfer') return;
         
         if (t.type === 'Income') {
           monthData.income += amount;
@@ -274,7 +276,7 @@ const Index = () => {
       console.log('=== FIM CÁLCULO DE MÉDIAS ===');
 
       // Prepare expense data for chart
-      const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories).map(t => ({
+      const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories && t.categories.type !== 'Transfer').map(t => ({
         categoryId: t.categories!.id,
         categoryName: t.categories!.name,
         categoryType: t.categories!.type as 'Standard' | 'Debt' | 'Investment',
@@ -285,7 +287,7 @@ const Index = () => {
 
       // Prepare previous month expense data for chart comparison
       const previousMonthExpenses: ExpenseData[] = historicalTransactions
-        .filter(t => t.reference_month === previousMonths[0] && t.type === 'Expense' && t.categories)
+        .filter(t => t.reference_month === previousMonths[0] && t.type === 'Expense' && t.categories && t.categories.type !== 'Transfer')
         .map(t => ({
           categoryId: t.categories!.id,
           categoryName: t.categories!.name,

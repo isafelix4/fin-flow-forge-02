@@ -148,7 +148,7 @@ const Planejamento = () => {
       // Load transaction summaries for the reference month
       const { data: transactionsData, error: transactionsError } = await supabase
         .from('transactions')
-        .select('category_id, subcategory_id, amount, type')
+        .select('category_id, subcategory_id, amount, type, categories(type)')
         .eq('user_id', user.id)
         .eq('reference_month', referenceMonth);
 
@@ -157,6 +157,9 @@ const Planejamento = () => {
       // Group transactions by category and subcategory
       const summaries: TransactionSummary[] = [];
       transactionsData?.forEach(transaction => {
+        // Exclude Transfer category transactions from planning calculations
+        if ((transaction as any).categories?.type === 'Transfer') return;
+
         const existing = summaries.find(s => 
           s.category_id === transaction.category_id && 
           s.subcategory_id === transaction.subcategory_id &&

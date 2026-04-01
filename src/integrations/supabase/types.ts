@@ -489,7 +489,7 @@ export type Database = {
         | "Credit Card"
         | "Brokerage"
         | "Other"
-      category_type: "Standard" | "Debt" | "Investment"
+      category_type: "Standard" | "Debt" | "Investment" | "Transfer"
       debt_type: "Financing" | "Loan" | "Credit Card" | "Consortium" | "Other"
       investment_type:
         | "Fixed Income"
@@ -633,7 +633,7 @@ export const Constants = {
         "Brokerage",
         "Other",
       ],
-      category_type: ["Standard", "Debt", "Investment"],
+      category_type: ["Standard", "Debt", "Investment", "Transfer"],
       debt_type: ["Financing", "Loan", "Credit Card", "Consortium", "Other"],
       investment_type: [
         "Fixed Income",
