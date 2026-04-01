@@ -148,7 +148,7 @@ const Planejamento = () => {
       // Load transaction summaries for the reference month
       const { data: transactionsData, error: transactionsError } = await supabase
         .from('transactions')
-        .select('category_id, subcategory_id, amount, type')
+        .select('category_id, subcategory_id, amount, type, categories(type)')
         .eq('user_id', user.id)
         .eq('reference_month', referenceMonth);
 
