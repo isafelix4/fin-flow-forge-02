@@ -321,8 +321,8 @@ const AccountSummaryTable: React.FC<AccountSummaryTableProps> = ({ referenceMont
                   <TableRow className="border-t-2 bg-muted/30 font-bold">
                     <TableCell>Total</TableCell>
                     <TableCell className="text-right">{formatCurrency(totals.residual)}</TableCell>
-                    <TableCell className="text-right text-green-600">{formatCurrency(totals.incomes)}</TableCell>
-                    <TableCell className="text-right text-destructive">{formatCurrency(totals.expenses)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.incomes)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(totals.expenses)}</TableCell>
                     <TableCell
                       className={`text-right ${totals.balance >= 0 ? 'text-green-600' : 'text-destructive'}`}
                     >
