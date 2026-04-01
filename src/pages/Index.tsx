@@ -287,7 +287,7 @@ const Index = () => {
 
       // Prepare previous month expense data for chart comparison
       const previousMonthExpenses: ExpenseData[] = historicalTransactions
-        .filter(t => t.reference_month === previousMonths[0] && t.type === 'Expense' && t.categories)
+        .filter(t => t.reference_month === previousMonths[0] && t.type === 'Expense' && t.categories && t.categories.type !== 'Transfer')
         .map(t => ({
           categoryId: t.categories!.id,
           categoryName: t.categories!.name,

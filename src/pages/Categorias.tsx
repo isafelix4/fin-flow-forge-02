@@ -33,7 +33,8 @@ interface Subcategory {
 const CATEGORY_TYPES = [
   { value: 'Standard', label: 'Padrão' },
   { value: 'Debt', label: 'Dívidas' },
-  { value: 'Investment', label: 'Investimentos' }
+  { value: 'Investment', label: 'Investimentos' },
+  { value: 'Transfer', label: 'Transferência' }
 ];
 
 export default function Categorias() {
