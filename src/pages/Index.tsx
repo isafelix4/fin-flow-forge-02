@@ -276,7 +276,7 @@ const Index = () => {
       console.log('=== FIM CÁLCULO DE MÉDIAS ===');
 
       // Prepare expense data for chart
-      const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories).map(t => ({
+      const expenseData: ExpenseData[] = currentTransactions.filter(t => t.type === 'Expense' && t.categories && t.categories.type !== 'Transfer').map(t => ({
         categoryId: t.categories!.id,
         categoryName: t.categories!.name,
         categoryType: t.categories!.type as 'Standard' | 'Debt' | 'Investment',
