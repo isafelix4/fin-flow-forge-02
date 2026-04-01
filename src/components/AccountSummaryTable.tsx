@@ -302,10 +302,10 @@ const AccountSummaryTable: React.FC<AccountSummaryTableProps> = ({ referenceMont
                           className="h-8 w-28 text-right ml-auto"
                         />
                       </TableCell>
-                      <TableCell className="text-right text-green-600 font-medium">
+                      <TableCell className="text-right font-medium">
                         {formatCurrency(row.incomes)}
                       </TableCell>
-                      <TableCell className="text-right text-destructive font-medium">
+                      <TableCell className="text-right font-medium">
                         {formatCurrency(row.expenses)}
                       </TableCell>
                       <TableCell
