@@ -464,19 +464,10 @@ export type Database = {
         }[]
       }
       hash_email: { Args: { email_input: string }; Returns: string }
-      log_security_event:
-        | {
-            Args: { event_details_input?: Json; event_type_input: string }
-            Returns: undefined
-          }
-        | {
-            Args: {
-              event_details_input?: Json
-              event_type_input: string
-              user_id_input?: string
-            }
-            Returns: undefined
-          }
+      log_security_event: {
+        Args: { event_details_input?: Json; event_type_input: string }
+        Returns: undefined
+      }
       validate_csv_input: {
         Args: { input_text: string; max_length?: number }
         Returns: string

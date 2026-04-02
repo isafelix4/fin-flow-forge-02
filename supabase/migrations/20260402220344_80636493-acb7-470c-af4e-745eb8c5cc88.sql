@@ -1,0 +1,1 @@
+DROP FUNCTION IF EXISTS public.log_security_event(text, jsonb, uuid);
