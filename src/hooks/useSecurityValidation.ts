@@ -88,22 +88,19 @@ export const useSecurityValidation = () => {
   };
 
   // Rate limiting for authentication attempts
-  const checkRateLimit = (maxAttempts = 5, timeWindow = 300000): boolean => { // 5 minutes
+  const checkRateLimit = (maxAttempts = 5, timeWindow = 300000): boolean => {
+    const current = loadRateLimitState();
     const now = Date.now();
     
-    // Reset if time window has passed
-    if (now - rateLimitState.lastAttempt > timeWindow) {
-      setRateLimitState({
-        attempts: 0,
-        lastAttempt: now,
-        blocked: false
-      });
+    if (now - current.lastAttempt > timeWindow) {
+      const reset = { attempts: 0, lastAttempt: now, blocked: false };
+      setRateLimitState(reset);
+      saveRateLimitState(reset);
       return true;
     }
 
-    // Check if blocked
-    if (rateLimitState.attempts >= maxAttempts) {
-      const timeLeft = Math.ceil((timeWindow - (now - rateLimitState.lastAttempt)) / 60000);
+    if (current.attempts >= maxAttempts) {
+      const timeLeft = Math.ceil((timeWindow - (now - current.lastAttempt)) / 60000);
       toast({
         title: "Muitas tentativas",
         description: `Aguarde ${timeLeft} minutos antes de tentar novamente`,
@@ -115,22 +112,21 @@ export const useSecurityValidation = () => {
     return true;
   };
 
-  // Record failed authentication attempt
   const recordFailedAttempt = () => {
-    setRateLimitState(prev => ({
-      attempts: prev.attempts + 1,
+    const current = loadRateLimitState();
+    const updated = {
+      attempts: current.attempts + 1,
       lastAttempt: Date.now(),
-      blocked: prev.attempts + 1 >= 5
-    }));
+      blocked: current.attempts + 1 >= 5
+    };
+    setRateLimitState(updated);
+    saveRateLimitState(updated);
   };
 
-  // Reset rate limit on successful authentication
   const resetRateLimit = () => {
-    setRateLimitState({
-      attempts: 0,
-      lastAttempt: 0,
-      blocked: false
-    });
+    const reset = { attempts: 0, lastAttempt: 0, blocked: false };
+    setRateLimitState(reset);
+    saveRateLimitState(reset);
   };
 
   // Security event logging
