@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -14,12 +14,26 @@ interface RateLimitState {
   blocked: boolean;
 }
 
+const RATE_LIMIT_KEY = 'auth_rate_limit';
+
+const loadRateLimitState = (): RateLimitState => {
+  try {
+    const stored = localStorage.getItem(RATE_LIMIT_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch {}
+  return { attempts: 0, lastAttempt: 0, blocked: false };
+};
+
+const saveRateLimitState = (state: RateLimitState) => {
+  try {
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(state));
+  } catch {}
+};
+
 export const useSecurityValidation = () => {
-  const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
-    attempts: 0,
-    lastAttempt: 0,
-    blocked: false
-  });
+  const [rateLimitState, setRateLimitState] = useState<RateLimitState>(loadRateLimitState);
 
   // Enhanced password validation
   const validatePassword = (password: string): PasswordValidationResult => {
