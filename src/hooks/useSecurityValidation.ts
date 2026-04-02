@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 
@@ -14,12 +14,26 @@ interface RateLimitState {
   blocked: boolean;
 }
 
+const RATE_LIMIT_KEY = 'auth_rate_limit';
+
+const loadRateLimitState = (): RateLimitState => {
+  try {
+    const stored = localStorage.getItem(RATE_LIMIT_KEY);
+    if (stored) {
+      return JSON.parse(stored);
+    }
+  } catch {}
+  return { attempts: 0, lastAttempt: 0, blocked: false };
+};
+
+const saveRateLimitState = (state: RateLimitState) => {
+  try {
+    localStorage.setItem(RATE_LIMIT_KEY, JSON.stringify(state));
+  } catch {}
+};
+
 export const useSecurityValidation = () => {
-  const [rateLimitState, setRateLimitState] = useState<RateLimitState>({
-    attempts: 0,
-    lastAttempt: 0,
-    blocked: false
-  });
+  const [rateLimitState, setRateLimitState] = useState<RateLimitState>(loadRateLimitState);
 
   // Enhanced password validation
   const validatePassword = (password: string): PasswordValidationResult => {
@@ -74,22 +88,19 @@ export const useSecurityValidation = () => {
   };
 
   // Rate limiting for authentication attempts
-  const checkRateLimit = (maxAttempts = 5, timeWindow = 300000): boolean => { // 5 minutes
+  const checkRateLimit = (maxAttempts = 5, timeWindow = 300000): boolean => {
+    const current = loadRateLimitState();
     const now = Date.now();
     
-    // Reset if time window has passed
-    if (now - rateLimitState.lastAttempt > timeWindow) {
-      setRateLimitState({
-        attempts: 0,
-        lastAttempt: now,
-        blocked: false
-      });
+    if (now - current.lastAttempt > timeWindow) {
+      const reset = { attempts: 0, lastAttempt: now, blocked: false };
+      setRateLimitState(reset);
+      saveRateLimitState(reset);
       return true;
     }
 
-    // Check if blocked
-    if (rateLimitState.attempts >= maxAttempts) {
-      const timeLeft = Math.ceil((timeWindow - (now - rateLimitState.lastAttempt)) / 60000);
+    if (current.attempts >= maxAttempts) {
+      const timeLeft = Math.ceil((timeWindow - (now - current.lastAttempt)) / 60000);
       toast({
         title: "Muitas tentativas",
         description: `Aguarde ${timeLeft} minutos antes de tentar novamente`,
@@ -101,22 +112,21 @@ export const useSecurityValidation = () => {
     return true;
   };
 
-  // Record failed authentication attempt
   const recordFailedAttempt = () => {
-    setRateLimitState(prev => ({
-      attempts: prev.attempts + 1,
+    const current = loadRateLimitState();
+    const updated = {
+      attempts: current.attempts + 1,
       lastAttempt: Date.now(),
-      blocked: prev.attempts + 1 >= 5
-    }));
+      blocked: current.attempts + 1 >= 5
+    };
+    setRateLimitState(updated);
+    saveRateLimitState(updated);
   };
 
-  // Reset rate limit on successful authentication
   const resetRateLimit = () => {
-    setRateLimitState({
-      attempts: 0,
-      lastAttempt: 0,
-      blocked: false
-    });
+    const reset = { attempts: 0, lastAttempt: 0, blocked: false };
+    setRateLimitState(reset);
+    saveRateLimitState(reset);
   };
 
   // Security event logging
