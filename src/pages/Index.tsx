@@ -62,7 +62,8 @@ const Index = () => {
     balance: 0,
     netWorth: 0,
     debtPayments: 0,
-    investmentContributions: 0
+    investmentContributions: 0,
+    previousBalance: 0
   });
   const [loading, setLoading] = useState(true);
   const [historicalAverage, setHistoricalAverage] = useState<HistoricalAverage>({
