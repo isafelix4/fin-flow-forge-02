@@ -82,7 +82,7 @@ const Index = () => {
       const previousMonths = getPreviousReferenceMonths(referenceMonth, 3);
 
       // Parallel queries for current month and historical data
-      const [currentTransactionsResponse, historicalTransactionsResponse, investmentsResponse, debtsResponse, historicalInvestmentsResponse, historicalDebtsResponse] = await Promise.all([
+      const [currentTransactionsResponse, historicalTransactionsResponse, investmentsResponse, debtsResponse, historicalInvestmentsResponse, historicalDebtsResponse, previousBalances] = await Promise.all([
       // Current month transactions with detailed category/subcategory info
       supabase.from('transactions').select(`
             amount,
@@ -123,7 +123,9 @@ const Index = () => {
       // Historical investments for historical net worth (we'll use current values as approximation)
       supabase.from('investments').select('current_balance').eq('user_id', user.id),
       // Historical debts for historical net worth (we'll use current values as approximation)
-      supabase.from('debts').select('current_balance').eq('user_id', user.id)]);
+      supabase.from('debts').select('current_balance').eq('user_id', user.id),
+      // Previous month balances for cash flow card
+      getPreviousMonthBalances(user.id, referenceMonth)]);
       if (currentTransactionsResponse.error) {
         console.error('Error fetching current transactions:', currentTransactionsResponse.error);
         toast({
