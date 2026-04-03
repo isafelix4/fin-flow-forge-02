@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import GraficoDespesasInterativo from '@/components/GraficoDespesasInterativo';
 import { InsightsCard } from '@/components/InsightsCard';
 import AccountSummaryTable from '@/components/AccountSummaryTable';
+import { getPreviousMonthBalances, getTotalPreviousBalance, PreviousBalanceByType } from '@/lib/previousMonthBalance';
+
 interface DashboardData {
   income: number;
   expenses: number;
@@ -21,6 +23,7 @@ interface DashboardData {
   netWorth: number;
   debtPayments: number;
   investmentContributions: number;
+  previousBalance: number;
 }
 interface HistoricalAverage {
   income: number;
