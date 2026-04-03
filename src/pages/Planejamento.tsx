@@ -75,7 +75,7 @@ const Planejamento = () => {
   const [copySourceMonth, setCopySourceMonth] = useState<string>('');
   const [isCopying, setIsCopying] = useState(false);
   const [modalPlanType, setModalPlanType] = useState<'RECEITA' | 'DESPESA'>('RECEITA');
-
+  const [previousBalanceByType, setPreviousBalanceByType] = useState<PreviousBalanceByType>({});
   // Detecta se há alterações não salvas
   const hasUnsavedChanges = useMemo(() => {
     if (budgets.length !== localBudgets.length) return true;
