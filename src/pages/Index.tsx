@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button';
 import GraficoDespesasInterativo from '@/components/GraficoDespesasInterativo';
 import { InsightsCard } from '@/components/InsightsCard';
 import AccountSummaryTable from '@/components/AccountSummaryTable';
+import { getPreviousMonthBalances, getTotalPreviousBalance, PreviousBalanceByType } from '@/lib/previousMonthBalance';
+
 interface DashboardData {
   income: number;
   expenses: number;
@@ -21,6 +23,7 @@ interface DashboardData {
   netWorth: number;
   debtPayments: number;
   investmentContributions: number;
+  previousBalance: number;
 }
 interface HistoricalAverage {
   income: number;
@@ -59,7 +62,8 @@ const Index = () => {
     balance: 0,
     netWorth: 0,
     debtPayments: 0,
-    investmentContributions: 0
+    investmentContributions: 0,
+    previousBalance: 0
   });
   const [loading, setLoading] = useState(true);
   const [historicalAverage, setHistoricalAverage] = useState<HistoricalAverage>({
@@ -78,7 +82,7 @@ const Index = () => {
       const previousMonths = getPreviousReferenceMonths(referenceMonth, 3);
 
       // Parallel queries for current month and historical data
-      const [currentTransactionsResponse, historicalTransactionsResponse, investmentsResponse, debtsResponse, historicalInvestmentsResponse, historicalDebtsResponse] = await Promise.all([
+      const [currentTransactionsResponse, historicalTransactionsResponse, investmentsResponse, debtsResponse, historicalInvestmentsResponse, historicalDebtsResponse, previousBalances] = await Promise.all([
       // Current month transactions with detailed category/subcategory info
       supabase.from('transactions').select(`
             amount,
@@ -119,7 +123,9 @@ const Index = () => {
       // Historical investments for historical net worth (we'll use current values as approximation)
       supabase.from('investments').select('current_balance').eq('user_id', user.id),
       // Historical debts for historical net worth (we'll use current values as approximation)
-      supabase.from('debts').select('current_balance').eq('user_id', user.id)]);
+      supabase.from('debts').select('current_balance').eq('user_id', user.id),
+      // Previous month balances for cash flow card
+      getPreviousMonthBalances(user.id, referenceMonth)]);
       if (currentTransactionsResponse.error) {
         console.error('Error fetching current transactions:', currentTransactionsResponse.error);
         toast({
@@ -301,13 +307,15 @@ const Index = () => {
       const totalInvestments = investmentsResponse.data?.reduce((sum, inv) => sum + Number(inv.current_balance), 0) || 0;
       const totalDebts = debtsResponse.data?.reduce((sum, debt) => sum + Number(debt.current_balance), 0) || 0;
       const netWorth = totalInvestments - totalDebts;
+      const totalPreviousBalance = getTotalPreviousBalance(previousBalances);
       setDashboardData({
         income,
         expenses,
-        balance: income - expenses,
+        balance: totalPreviousBalance + income - expenses,
         netWorth,
         debtPayments,
-        investmentContributions
+        investmentContributions,
+        previousBalance: totalPreviousBalance
       });
       setHistoricalAverage({
         income: avgIncome,
@@ -420,7 +428,21 @@ const Index = () => {
         {/* Fluxo de Caixa Section */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Fluxo de Caixa de {getMonthName()}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Saldo Anterior
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Contas correntes, VA e dinheiro</p>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-foreground">
+                  {loading ? '...' : formatCurrency(dashboardData.previousBalance)}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">

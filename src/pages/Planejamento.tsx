@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { getPreviousMonthBalances, getTotalPreviousBalance, ACCOUNT_TYPE_LABELS, PreviousBalanceByType } from '@/lib/previousMonthBalance';
 import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
@@ -74,7 +75,7 @@ const Planejamento = () => {
   const [copySourceMonth, setCopySourceMonth] = useState<string>('');
   const [isCopying, setIsCopying] = useState(false);
   const [modalPlanType, setModalPlanType] = useState<'RECEITA' | 'DESPESA'>('RECEITA');
-
+  const [previousBalanceByType, setPreviousBalanceByType] = useState<PreviousBalanceByType>({});
   // Detecta se há alterações não salvas
   const hasUnsavedChanges = useMemo(() => {
     if (budgets.length !== localBudgets.length) return true;
@@ -85,14 +86,17 @@ const Planejamento = () => {
     });
   }, [budgets, localBudgets]);
 
+  // Previous balance total for income rows
+  const totalPreviousBalance = getTotalPreviousBalance(previousBalanceByType);
+
   // Summary calculations baseados no estado local
   const receitasPlanejadas = localBudgets
     .filter(b => b.plan_type === 'RECEITA')
-    .reduce((sum, b) => sum + Number(b.planned_amount), 0);
+    .reduce((sum, b) => sum + Number(b.planned_amount), 0) + totalPreviousBalance;
 
   const receitasRealizadas = transactionSummaries
     .filter(t => t.transaction_type === 'Income')
-    .reduce((sum, t) => sum + Number(t.total_amount), 0);
+    .reduce((sum, t) => sum + Number(t.total_amount), 0) + totalPreviousBalance;
 
   const despesasPlanejadas = localBudgets
     .filter(b => b.plan_type === 'DESPESA')
@@ -189,6 +193,10 @@ const Planejamento = () => {
       setBudgets(mappedBudgets);
       setLocalBudgets(mappedBudgets);
       setTransactionSummaries(summaries);
+
+      // Load previous month balances
+      const prevBalances = await getPreviousMonthBalances(user.id, referenceMonth);
+      setPreviousBalanceByType(prevBalances);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast({
@@ -669,6 +677,26 @@ const Planejamento = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
+                      {/* Previous balance rows (read-only) */}
+                      {Object.entries(previousBalanceByType)
+                        .filter(([, value]) => value !== 0)
+                        .map(([type, value]) => (
+                          <TableRow key={`prev-${type}`} className="bg-muted/30">
+                            <TableCell className="font-medium text-muted-foreground">
+                              Saldo Anterior - {ACCOUNT_TYPE_LABELS[type] || type}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">-</TableCell>
+                            <TableCell className="text-muted-foreground">{formatCurrency(value)}</TableCell>
+                            <TableCell className="text-muted-foreground">{formatCurrency(value)}</TableCell>
+                            <TableCell className="text-muted-foreground">{formatCurrency(0)}</TableCell>
+                            <TableCell>
+                              <div className="w-full max-w-[100px]">
+                                <Progress value={100} className="h-2" />
+                              </div>
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        ))}
                       {renderBudgetRows('RECEITA')}
                     </TableBody>
                   </Table>
