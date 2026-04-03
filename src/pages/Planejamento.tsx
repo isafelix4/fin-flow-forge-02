@@ -677,6 +677,26 @@ const Planejamento = () => {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
+                      {/* Previous balance rows (read-only) */}
+                      {Object.entries(previousBalanceByType)
+                        .filter(([, value]) => value !== 0)
+                        .map(([type, value]) => (
+                          <TableRow key={`prev-${type}`} className="bg-muted/30">
+                            <TableCell className="font-medium text-muted-foreground">
+                              Saldo Anterior - {ACCOUNT_TYPE_LABELS[type] || type}
+                            </TableCell>
+                            <TableCell className="text-muted-foreground">-</TableCell>
+                            <TableCell className="text-muted-foreground">{formatCurrency(value)}</TableCell>
+                            <TableCell className="text-muted-foreground">{formatCurrency(value)}</TableCell>
+                            <TableCell className="text-muted-foreground">{formatCurrency(0)}</TableCell>
+                            <TableCell>
+                              <div className="w-full max-w-[100px]">
+                                <Progress value={100} className="h-2" />
+                              </div>
+                            </TableCell>
+                            <TableCell></TableCell>
+                          </TableRow>
+                        ))}
                       {renderBudgetRows('RECEITA')}
                     </TableBody>
                   </Table>
