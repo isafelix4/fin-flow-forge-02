@@ -86,14 +86,17 @@ const Planejamento = () => {
     });
   }, [budgets, localBudgets]);
 
+  // Previous balance total for income rows
+  const totalPreviousBalance = getTotalPreviousBalance(previousBalanceByType);
+
   // Summary calculations baseados no estado local
   const receitasPlanejadas = localBudgets
     .filter(b => b.plan_type === 'RECEITA')
-    .reduce((sum, b) => sum + Number(b.planned_amount), 0);
+    .reduce((sum, b) => sum + Number(b.planned_amount), 0) + totalPreviousBalance;
 
   const receitasRealizadas = transactionSummaries
     .filter(t => t.transaction_type === 'Income')
-    .reduce((sum, t) => sum + Number(t.total_amount), 0);
+    .reduce((sum, t) => sum + Number(t.total_amount), 0) + totalPreviousBalance;
 
   const despesasPlanejadas = localBudgets
     .filter(b => b.plan_type === 'DESPESA')
