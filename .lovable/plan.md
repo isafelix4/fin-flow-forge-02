@@ -1,83 +1,63 @@
 
 
-## Plano: Novo tipo de categoria "Transferência"
+## Plano: Saldo Anterior no Dashboard e Planejamento
 
-### Resumo
-Adicionar o valor `'Transfer'` ao enum `category_type` no banco de dados. Transações com categorias desse tipo serão **excluídas** dos KPIs do dashboard, gráfico de despesas e planejamento, mas **incluídas** no cálculo de entradas/saídas da tabela Resumo por Conta.
+### Contexto
 
-### Alteração de banco
+Ambas as melhorias dependem de um mesmo dado: o **saldo final do mes anterior** por tipo de conta (`Checking Account`, `Meal Voucher`, `Cash`). O saldo final de uma conta no mes anterior e calculado como: `saldo_residual + receitas - despesas` (mesma logica ja usada no `AccountSummaryTable`).
 
-Uma migration para adicionar o novo valor ao enum:
+---
 
-```sql
-ALTER TYPE public.category_type ADD VALUE 'Transfer';
-```
+### Melhoria 1 -- Card "Saldo Anterior" no Dashboard (Index.tsx)
 
-Nenhuma nova tabela. Nenhuma alteração em RLS.
+**O que muda:**
+- Na secao "Fluxo de Caixa", adicionar um card **antes** de "Receitas" com o titulo "Saldo Anterior"
+- Esse card mostra a soma do saldo final do mes anterior das contas dos tipos: Checking Account, Meal Voucher e Cash
+- O grid passa de `md:grid-cols-3` para `md:grid-cols-4`
+- O calculo do card "Saldo" muda para: `Saldo Anterior + Receitas - Despesas`
 
-### Arquivos modificados
+**Dados necessarios (novas queries no `loadDashboardData`):**
+1. Buscar contas do usuario filtrando `type IN ('Checking Account', 'Meal Voucher', 'Cash')`
+2. Buscar `account_balances` do mes anterior (`previousMonths[0]`) para essas contas
+3. Buscar transacoes do mes anterior para essas contas (para calcular saldo final quando nao ha `account_balances` salvo)
+4. Calcular: para cada conta, `residual + incomes - expenses` do mes anterior; somar tudo
 
-#### 1. `src/pages/Index.tsx` — Excluir "Transfer" dos KPIs e gráfico
+**Arquivo:** `src/pages/Index.tsx`
 
-Nos cálculos de `income`, `expenses`, `debtPayments`, `investmentContributions` (linhas 144-147), adicionar filtro para excluir transações com `categories?.type === 'Transfer'`:
+---
 
-```ts
-// Receitas: excluir Transfer
-const income = currentTransactions
-  .filter(t => t.type === 'Income' && t.categories?.type !== 'Transfer')
-  .reduce(...);
+### Melhoria 2 -- Linhas de "Saldo Anterior" no Planejamento (Planejamento.tsx)
 
-// Despesas: excluir Transfer
-const expenses = currentTransactions
-  .filter(t => t.type === 'Expense' && t.categories?.type !== 'Transfer')
-  .reduce(...);
-```
+**O que muda:**
+- Na tabela de "Receitas Planejadas", adicionar linhas read-only (sem input, sem botao de excluir) para cada tipo de conta que tenha saldo anterior diferente de zero
+- Formato: "Saldo Anterior - Contas Correntes", "Saldo Anterior - Vale Alimentacao", "Saldo Anterior - Dinheiro"
+- Tanto "Planejado" quanto "Realizado" mostram o mesmo valor (o saldo total do mes anterior para aquele tipo de conta)
+- Essas linhas sao incluidas nos totais de `receitasPlanejadas` e `receitasRealizadas`
 
-Na preparação de `expenseData` para o gráfico (linha 277), filtrar:
-```ts
-.filter(t => t.type === 'Expense' && t.categories && t.categories.type !== 'Transfer')
-```
+**Dados necessarios (novas queries no `loadData`):**
+1. Mesma logica da melhoria 1: buscar contas, balances e transacoes do mes anterior
+2. Agrupar por tipo de conta e somar os saldos finais
+3. Armazenar em novo state (ex: `previousBalanceByType`)
 
-Mesmo filtro para `previousMonthExpenses` (linha 287).
+**Arquivo:** `src/pages/Planejamento.tsx`
 
-No processamento histórico (linhas 170-198), excluir transações Transfer dos totais de income/expenses/debt/investment.
+---
 
-#### 2. `src/pages/Planejamento.tsx` — Excluir categorias Transfer
+### Detalhes Tecnicos
 
-Ao calcular `receitasRealizadas` e `despesasRealizadas`, verificar se a transação pertence a uma categoria Transfer e excluí-la. Isso requer buscar o tipo da categoria junto com as transações na query de `loadData`.
+**Funcao compartilhada** -- Criar um utilitario reutilizavel (ex: `src/lib/previousMonthBalance.ts`) que:
+- Recebe `userId` e `referenceMonth`
+- Faz as 3 queries em paralelo (accounts filtradas, account_balances do mes anterior, transactions do mes anterior)
+- Retorna `Record<string, number>` mapeando tipo de conta para saldo total (ex: `{ 'Checking Account': 5000, 'Meal Voucher': 200, 'Cash': 0 }`)
+- Filtra apenas os tipos relevantes: `Checking Account`, `Meal Voucher`, `Cash`
 
-#### 3. `src/lib/insights.ts` / SQL function `get_category_insights` — Já exclui non-Standard
+**Impacto na performance:**
+- 3 queries adicionais por pagina, executadas em paralelo com as queries existentes via `Promise.all`
+- Nenhuma alteracao no banco de dados (sem migrations)
+- Nenhum impacto nas funcionalidades existentes
 
-A função SQL de insights já filtra `c.type = 'Standard'`, então categorias Transfer são automaticamente excluídas. Nenhuma alteração necessária.
-
-#### 4. `src/pages/Categorias.tsx` — Adicionar opção no formulário
-
-Adicionar ao array `CATEGORY_TYPES`:
-```ts
-{ value: 'Transfer', label: 'Transferência' }
-```
-
-#### 5. `src/components/AccountSummaryTable.tsx` — Nenhuma alteração
-
-O componente já soma todas as transações por conta independente do tipo de categoria. Transações Transfer continuarão contando normalmente no balanço por conta.
-
-#### 6. `src/integrations/supabase/types.ts` — Atualização automática
-
-Após a migration, o tipo será atualizado automaticamente pelo Supabase para incluir `'Transfer'` no enum.
-
-### Impacto em outras telas
-
-| Tela | Impacto |
-|---|---|
-| Dashboard KPIs | Transações Transfer excluídas dos totais |
-| Gráfico despesas | Categorias Transfer não aparecem |
-| Insights | Já excluídas (filtro `Standard` existente) |
-| Planejamento | Transações Transfer excluídas dos realizados |
-| Resumo por Conta | Sem alteração — continua incluindo tudo |
-| Transações | Sem alteração — lista todas normalmente |
-| Importar CSV | Sem alteração — novo tipo disponível via categorias |
-| Categorias | Nova opção "Transferência" no select |
-
-### Princípio de implementação
-A exclusão é feita **no frontend**, adicionando `!== 'Transfer'` nos filtros relevantes. Isso evita alterar queries SQL ou estrutura de dados, minimizando risco de impacto colateral.
+**Resumo de arquivos:**
+1. `src/lib/previousMonthBalance.ts` -- novo utilitario compartilhado
+2. `src/pages/Index.tsx` -- novo card + calculo de saldo atualizado
+3. `src/pages/Planejamento.tsx` -- linhas read-only de saldo anterior na tabela de receitas
 
