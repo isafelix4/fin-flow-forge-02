@@ -124,6 +124,7 @@ const Planejamento = () => {
           )
         `)
         .eq('user_id', user.id)
+        .neq('type', 'Transfer')
         .order('name');
 
       if (categoriesError) throw categoriesError;
