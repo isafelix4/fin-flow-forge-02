@@ -428,7 +428,21 @@ const Index = () => {
         {/* Fluxo de Caixa Section */}
         <div className="space-y-4">
           <h2 className="text-xl font-semibold">Fluxo de Caixa de {getMonthName()}</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Saldo Anterior
+                </CardTitle>
+                <p className="text-xs text-muted-foreground">Contas correntes, VA e dinheiro</p>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-foreground">
+                  {loading ? '...' : formatCurrency(dashboardData.previousBalance)}
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
