@@ -307,13 +307,15 @@ const Index = () => {
       const totalInvestments = investmentsResponse.data?.reduce((sum, inv) => sum + Number(inv.current_balance), 0) || 0;
       const totalDebts = debtsResponse.data?.reduce((sum, debt) => sum + Number(debt.current_balance), 0) || 0;
       const netWorth = totalInvestments - totalDebts;
+      const totalPreviousBalance = getTotalPreviousBalance(previousBalances);
       setDashboardData({
         income,
         expenses,
-        balance: income - expenses,
+        balance: totalPreviousBalance + income - expenses,
         netWorth,
         debtPayments,
-        investmentContributions
+        investmentContributions,
+        previousBalance: totalPreviousBalance
       });
       setHistoricalAverage({
         income: avgIncome,
