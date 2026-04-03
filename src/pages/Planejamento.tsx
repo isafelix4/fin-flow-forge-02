@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { getPreviousMonthBalances, getTotalPreviousBalance, ACCOUNT_TYPE_LABELS, PreviousBalanceByType } from '@/lib/previousMonthBalance';
 import { useReferenceMonth } from '@/contexts/ReferenceMonthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Header } from '@/components/Header';
