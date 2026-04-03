@@ -193,6 +193,10 @@ const Planejamento = () => {
       setBudgets(mappedBudgets);
       setLocalBudgets(mappedBudgets);
       setTransactionSummaries(summaries);
+
+      // Load previous month balances
+      const prevBalances = await getPreviousMonthBalances(user.id, referenceMonth);
+      setPreviousBalanceByType(prevBalances);
     } catch (error) {
       console.error('Erro ao carregar dados:', error);
       toast({
