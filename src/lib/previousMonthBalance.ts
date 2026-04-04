@@ -24,12 +24,17 @@ export async function getPreviousMonthBalances(
 ): Promise<PreviousBalanceByType> {
   const previousMonth = shiftReferenceMonth(referenceMonth, -1);
 
-  const [accountsRes, balancesRes, transactionsRes] = await Promise.all([
+  const [accountsRes, currentBalancesRes, prevBalancesRes, prevTransactionsRes] = await Promise.all([
     supabase
       .from('accounts')
       .select('id, type')
       .eq('user_id', userId)
       .in('type', [...BALANCE_ACCOUNT_TYPES]),
+    supabase
+      .from('account_balances')
+      .select('account_id, residual_balance')
+      .eq('user_id', userId)
+      .eq('reference_month', referenceMonth),
     supabase
       .from('account_balances')
       .select('account_id, residual_balance')
@@ -42,44 +47,56 @@ export async function getPreviousMonthBalances(
       .eq('reference_month', previousMonth),
   ]);
 
-  if (accountsRes.error || balancesRes.error || transactionsRes.error) {
+  if (accountsRes.error || currentBalancesRes.error || prevBalancesRes.error || prevTransactionsRes.error) {
     console.error('Error fetching previous month balances:', {
       accounts: accountsRes.error,
-      balances: balancesRes.error,
-      transactions: transactionsRes.error,
+      currentBalances: currentBalancesRes.error,
+      prevBalances: prevBalancesRes.error,
+      prevTransactions: prevTransactionsRes.error,
     });
     return {};
   }
 
   const accounts = accountsRes.data || [];
-  const balances = balancesRes.data || [];
-  const transactions = transactionsRes.data || [];
+  const currentBalances = currentBalancesRes.data || [];
+  const prevBalances = prevBalancesRes.data || [];
+  const prevTransactions = prevTransactionsRes.data || [];
 
   // Build maps
-  const residualMap = new Map<number, number>();
-  balances.forEach(b => residualMap.set(b.account_id, Number(b.residual_balance)));
+  const currentBalanceMap = new Map<number, number>();
+  currentBalances.forEach(b => currentBalanceMap.set(b.account_id, Number(b.residual_balance)));
 
-  const incomeMap = new Map<number, number>();
-  const expenseMap = new Map<number, number>();
-  transactions.forEach(t => {
-    const amount = Number(t.amount);
+  const prevResidualMap = new Map<number, number>();
+  prevBalances.forEach(b => prevResidualMap.set(b.account_id, Number(b.residual_balance)));
+
+  const prevIncomeMap = new Map<number, number>();
+  const prevExpenseMap = new Map<number, number>();
+  prevTransactions.forEach(t => {
+    const amount = Math.abs(Number(t.amount));
     if (t.type === 'Income') {
-      incomeMap.set(t.account_id, (incomeMap.get(t.account_id) || 0) + amount);
+      prevIncomeMap.set(t.account_id, (prevIncomeMap.get(t.account_id) || 0) + amount);
     } else {
-      expenseMap.set(t.account_id, (expenseMap.get(t.account_id) || 0) + amount);
+      prevExpenseMap.set(t.account_id, (prevExpenseMap.get(t.account_id) || 0) + amount);
     }
   });
 
   // Group by account type
   const result: PreviousBalanceByType = {};
   accounts.forEach(account => {
-    const residual = residualMap.get(account.id) || 0;
-    const income = incomeMap.get(account.id) || 0;
-    const expense = expenseMap.get(account.id) || 0;
-    const finalBalance = residual + income - expense;
+    let balance: number;
+    if (currentBalanceMap.has(account.id)) {
+      // Prioritize stored residual for current month (same as AccountSummaryTable)
+      balance = currentBalanceMap.get(account.id)!;
+    } else {
+      // Fallback: calculate from previous month data
+      const prevResidual = prevResidualMap.get(account.id) || 0;
+      const prevIncome = prevIncomeMap.get(account.id) || 0;
+      const prevExpense = prevExpenseMap.get(account.id) || 0;
+      balance = prevResidual + prevIncome - prevExpense;
+    }
 
     const type = account.type as string;
-    result[type] = (result[type] || 0) + finalBalance;
+    result[type] = (result[type] || 0) + balance;
   });
 
   return result;
