@@ -1,63 +1,40 @@
 
 
-## Plano: Saldo Anterior no Dashboard e Planejamento
+## Plano de Correção: Saldo Anterior com valores incorretos
 
-### Contexto
+### Diagnóstico
 
-Ambas as melhorias dependem de um mesmo dado: o **saldo final do mes anterior** por tipo de conta (`Checking Account`, `Meal Voucher`, `Cash`). O saldo final de uma conta no mes anterior e calculado como: `saldo_residual + receitas - despesas` (mesma logica ja usada no `AccountSummaryTable`).
+Comparando `getPreviousMonthBalances` (em `previousMonthBalance.ts`) com a lógica do `AccountSummaryTable`, encontrei duas divergências que causam os valores incorretos:
 
----
+**1. Falta de `Math.abs` nos valores de transações**
+O `AccountSummaryTable` usa `Math.abs(Number(t.amount))` para garantir que valores de transações são sempre positivos antes de classificá-los como receita ou despesa. O `getPreviousMonthBalances` usa apenas `Number(t.amount)`, o que pode gerar cálculos errados se houver valores negativos no banco.
 
-### Melhoria 1 -- Card "Saldo Anterior" no Dashboard (Index.tsx)
+**2. Não consulta o saldo residual do mês atual**
+O `AccountSummaryTable` prioriza o `residual_balance` armazenado para o mês ATUAL (que o usuário pode ter editado manualmente). Se não houver valor armazenado, calcula a partir do mês anterior. O `getPreviousMonthBalances` ignora completamente o mês atual e sempre calcula do zero usando dados de M-1, o que pode divergir do valor que o usuário vê no Resumo por Conta.
 
-**O que muda:**
-- Na secao "Fluxo de Caixa", adicionar um card **antes** de "Receitas" com o titulo "Saldo Anterior"
-- Esse card mostra a soma do saldo final do mes anterior das contas dos tipos: Checking Account, Meal Voucher e Cash
-- O grid passa de `md:grid-cols-3` para `md:grid-cols-4`
-- O calculo do card "Saldo" muda para: `Saldo Anterior + Receitas - Despesas`
+### Correção
 
-**Dados necessarios (novas queries no `loadDashboardData`):**
-1. Buscar contas do usuario filtrando `type IN ('Checking Account', 'Meal Voucher', 'Cash')`
-2. Buscar `account_balances` do mes anterior (`previousMonths[0]`) para essas contas
-3. Buscar transacoes do mes anterior para essas contas (para calcular saldo final quando nao ha `account_balances` salvo)
-4. Calcular: para cada conta, `residual + incomes - expenses` do mes anterior; somar tudo
+**Arquivo:** `src/lib/previousMonthBalance.ts`
 
-**Arquivo:** `src/pages/Index.tsx`
+Alinhar a lógica com o `AccountSummaryTable`:
 
----
+1. Adicionar uma query para `account_balances` do mês de referência ATUAL (além da query do mês anterior que já existe)
+2. Para cada conta, priorizar o `residual_balance` armazenado para o mês atual (se existir), pois ele representa exatamente o saldo inicial do mês = saldo final do mês anterior
+3. Só calcular a partir do mês anterior (`residual(M-1) + income(M-1) - expense(M-1)`) quando não houver valor armazenado para o mês atual
+4. Usar `Math.abs()` nos valores de transações, igual ao `AccountSummaryTable`
 
-### Melhoria 2 -- Linhas de "Saldo Anterior" no Planejamento (Planejamento.tsx)
+**Impacto:** Apenas o arquivo `previousMonthBalance.ts` será alterado. Nenhuma mudança em `Index.tsx`, `Planejamento.tsx` ou `AccountSummaryTable.tsx`. A query adicional (account_balances do mês atual) será executada em paralelo com as existentes.
 
-**O que muda:**
-- Na tabela de "Receitas Planejadas", adicionar linhas read-only (sem input, sem botao de excluir) para cada tipo de conta que tenha saldo anterior diferente de zero
-- Formato: "Saldo Anterior - Contas Correntes", "Saldo Anterior - Vale Alimentacao", "Saldo Anterior - Dinheiro"
-- Tanto "Planejado" quanto "Realizado" mostram o mesmo valor (o saldo total do mes anterior para aquele tipo de conta)
-- Essas linhas sao incluidas nos totais de `receitasPlanejadas` e `receitasRealizadas`
+### Detalhes Técnicos
 
-**Dados necessarios (novas queries no `loadData`):**
-1. Mesma logica da melhoria 1: buscar contas, balances e transacoes do mes anterior
-2. Agrupar por tipo de conta e somar os saldos finais
-3. Armazenar em novo state (ex: `previousBalanceByType`)
+```text
+Lógica atual (incorreta):
+  saldo_anterior = residual(M-1) + income(M-1) - expense(M-1)
 
-**Arquivo:** `src/pages/Planejamento.tsx`
-
----
-
-### Detalhes Tecnicos
-
-**Funcao compartilhada** -- Criar um utilitario reutilizavel (ex: `src/lib/previousMonthBalance.ts`) que:
-- Recebe `userId` e `referenceMonth`
-- Faz as 3 queries em paralelo (accounts filtradas, account_balances do mes anterior, transactions do mes anterior)
-- Retorna `Record<string, number>` mapeando tipo de conta para saldo total (ex: `{ 'Checking Account': 5000, 'Meal Voucher': 200, 'Cash': 0 }`)
-- Filtra apenas os tipos relevantes: `Checking Account`, `Meal Voucher`, `Cash`
-
-**Impacto na performance:**
-- 3 queries adicionais por pagina, executadas em paralelo com as queries existentes via `Promise.all`
-- Nenhuma alteracao no banco de dados (sem migrations)
-- Nenhum impacto nas funcionalidades existentes
-
-**Resumo de arquivos:**
-1. `src/lib/previousMonthBalance.ts` -- novo utilitario compartilhado
-2. `src/pages/Index.tsx` -- novo card + calculo de saldo atualizado
-3. `src/pages/Planejamento.tsx` -- linhas read-only de saldo anterior na tabela de receitas
+Lógica corrigida (alinhada com AccountSummaryTable):
+  Para cada conta:
+    SE account_balances(M) existe → saldo_anterior = residual(M)
+    SENÃO → saldo_anterior = residual(M-1) + |income(M-1)| - |expense(M-1)|
+  Agrupar por tipo de conta e somar
+```
 
