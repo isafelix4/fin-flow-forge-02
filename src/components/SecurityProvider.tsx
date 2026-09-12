@@ -31,19 +31,6 @@ export const SecurityProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           timestamp: new Date().toISOString()
         });
       }
-
-      // Monitor for suspicious activity
-      const handleVisibilityChange = () => {
-        if (document.hidden && user) {
-          logSecurityEvent('session_hidden', { timestamp: new Date().toISOString() });
-        }
-      };
-
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      
-      return () => {
-        document.removeEventListener('visibilitychange', handleVisibilityChange);
-      };
     };
 
     setupSecurityMonitoring();
