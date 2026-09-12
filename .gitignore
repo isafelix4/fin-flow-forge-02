@@ -22,3 +22,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+"" 
+"# Vari veis de ambiente - nunca versionar"  ".env"  ".env.local"  ".env.*.local" 
+".env.*.local" 
+".env.local" 
+".env" 
+"# Vari veis de ambiente - nunca versionar" 
+"" 
